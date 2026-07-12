@@ -13,21 +13,7 @@ st.title("🎤 Portal do Prestador")
 
 # Inicializar sessão de login
 if "prestador_id" not in st.session_state:
-    st.session_state["prestador_id"] = None
-
-if st.session_state["prestador_id"] is None:
-    st.subheader("Login de Acesso")
-    nome = st.text_input("Nome de Usuário:")
-    senha = st.text_input("Senha:", type="password")
     
-    if st.button("Entrar"):
-        # Consulta no banco
-        res = supabase.table("prestadores").select("*").eq("nome_prestador", nome).eq("senha_acesso", senha).execute()
-        if res.data:
-            st.session_state["prestador_id"] = res.data[0]["id"]
-            st.session_state["nome"] = res.data[0]["nome_prestador"]
-            st.session_state["slug"] = res.data[0]["slug_unico"]
-            st.rerun()
         else:
             st.error("Credenciais inválidas!")
 else:
