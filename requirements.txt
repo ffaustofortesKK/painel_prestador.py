@@ -1,3 +1,2 @@
-streamlit
-supabase
-qrcode
+requests
+beautifulsoup4
