@@ -17,37 +17,35 @@ if "prestador_id" not in st.session_state: st.session_state.prestador_id = None
 if st.session_state.prestador_id is None:
     st.title("🎤 Portal do Prestador")
     
-    nome = st.text_input("Nome:")
+    # Captura os dados
+    nome_input = st.text_input("Nome:")
     sobrenomo = st.text_input("Sobrenome:") 
     telef = st.text_input("Telefone:")
     
     if st.button("Entrar"):
-        if nome and sobrenomo and telef:
+        if nome_input and sobrenomo and telef:
             try:
                 # 1. Tenta buscar pelo telefone
                 res = supabase.table("prestadores").select("*").eq("telefone", telef).execute()
                 
                 if res.data and len(res.data) > 0:
-                    # Login
                     st.session_state.update({
                         "prestador_id": res.data[0]["id"],
-                        "nome": f"{nome} {sobrenome}",
+                        "nome": f"{nome_input} {sobrenomo}",
                         "slug": res.data[0]["slug_unico"]
                     })
                     st.rerun()
                 else:
-                    # 2. Cadastro automático
-                    # Criamos um slug limpo (sem espaços)
-                    slug_novo = f"{nome.lower()}-{sobrenome.lower()}"
+                    # 2. Cadastro automático (Usando nomes exatos das suas colunas)
+                    slug_novo = f"{nome_input.lower()}-{sobrenomo.lower()}"
                     
                     novo_prestador = {
-                        "nome": nome,
-                        "sobrenome": sobrenome,
+                        "Nome": nome_input,      # Mapeado conforme sua lista
+                        "sobrenomo": sobrenomo,  # Mapeado conforme sua lista
                         "telefone": telef,
                         "slug_unico": slug_novo
                     }
                     
-                    # Tenta inserir
                     supabase.table("prestadores").insert(novo_prestador).execute()
                     
                     # Busca o ID após inserir
@@ -56,17 +54,17 @@ if st.session_state.prestador_id is None:
                     if res.data:
                         st.session_state.update({
                             "prestador_id": res.data[0]["id"],
-                            "nome": f"{nome} {sobrenome}",
+                            "nome": f"{nome_input} {sobrenomo}",
                             "slug": slug_novo
                         })
                         st.success("Cadastro realizado com sucesso!")
                         st.rerun()
                     else:
-                        st.error("Erro ao confirmar o cadastro no banco.")
+                        st.error("Erro ao validar cadastro no banco.")
             except Exception as e:
-                st.error(f"Erro ao comunicar com o banco: {e}")
+                st.error(f"Erro no banco: {e}")
         else:
-            st.error("⚠️ Por favor, preencha todos os campos.")
+            st.error("⚠️ Preencha todos os campos.")
 
 else:
     # --- PAINEL PRINCIPAL ---
