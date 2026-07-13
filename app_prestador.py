@@ -19,11 +19,11 @@ if st.session_state.prestador_id is None:
     
     # Captura os dados
     nome_input = st.text_input("Nome:")
-    sobrenomo = st.text_input("Sobrenome:") 
+    sobrenome_input = st.text_input("Sobrenome:") 
     telef = st.text_input("Telefone:")
     
     if st.button("Entrar"):
-        if nome_input and sobrenomo and telef:
+        if nome_input and sobrenome_input and telef:
             try:
                 # 1. Tenta buscar pelo telefone
                 res = supabase.table("prestadores").select("*").eq("telefone", telef).execute()
@@ -31,17 +31,17 @@ if st.session_state.prestador_id is None:
                 if res.data and len(res.data) > 0:
                     st.session_state.update({
                         "prestador_id": res.data[0]["id"],
-                        "nome": f"{nome_input} {sobrenomo}",
+                        "nome": f"{nome_input} {sobrenome_input}",
                         "slug": res.data[0]["slug_unico"]
                     })
                     st.rerun()
                 else:
                     # 2. Cadastro automático (Usando nomes exatos das suas colunas)
-                    slug_novo = f"{nome_input.lower()}-{sobrenomo.lower()}"
+                    slug_novo = f"{nome_input.lower()}-{sobrenome_input.lower()}"
                     
                     novo_prestador = {
-                        "Nome": nome_input,      # Mapeado conforme sua lista
-                        "sobrenomo": sobrenomo,  # Mapeado conforme sua lista
+                        "Nome": nome_input,        # Mantido com 'N' maiúsculo
+                        "Sobrenome": sobrenome_input, # Alterado para 'Sobrenome'
                         "telefone": telef,
                         "slug_unico": slug_novo
                     }
@@ -54,7 +54,7 @@ if st.session_state.prestador_id is None:
                     if res.data:
                         st.session_state.update({
                             "prestador_id": res.data[0]["id"],
-                            "nome": f"{nome_input} {sobrenomo}",
+                            "nome": f"{nome_input} {sobrenome_input}",
                             "slug": slug_novo
                         })
                         st.success("Cadastro realizado com sucesso!")
