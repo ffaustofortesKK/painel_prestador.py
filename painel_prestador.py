@@ -17,11 +17,11 @@ st.markdown("""
     <style>
     .stApp { background-color: #0e0e0e; }
     h1, h2, h3, p, label, div { color: #ffffff !important; }
-    .big-box { background-color: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; }
+    .big-box { background-color: #1a1a1a; padding: 20px; border-radius: 10px; border: 1px solid #333; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNÇÃO DE BUSCA NA NUVEM ---
+# --- FUNÇÃO DE BUSCA ---
 def buscar_musicas(termo):
     headers = {"User-Agent": "Mozilla/5.0"}
     url_base = "https://www.nephobox.com/portuguese/main?category=all&path=%2FKARAOKE"
@@ -39,11 +39,9 @@ if "prestador_id" not in st.session_state:
 
 # --- FLUXO PRINCIPAL ---
 if st.session_state["prestador_id"] is None:
-    # TELA DE LOGIN
     st.title("🎤 Portal do Prestador")
     nome = st.text_input("Nome de Usuário:")
     senha = st.text_input("Senha:", type="password")
-    
     if st.button("Entrar"):
         res = supabase.table("prestadores").select("*").eq("nome_prestador", nome).eq("senha_acesso", senha).execute()
         if res.data:
@@ -53,39 +51,47 @@ if st.session_state["prestador_id"] is None:
             st.rerun()
         else:
             st.error("Credenciais inválidas!")
-
 else:
-    # TELA DO PAINEL (LOGADO)
-    st.title(f"🎤 Bem-vindo, {st.session_state['nome']}!")
-    
-    # Gerar Link do Cliente
+    st.title(f"Bem-vindo, {st.session_state['nome']}!")
     slug = st.session_state["slug"]
+    
+    # 1. LINK E QR CODE (O Elo de Ligação)
     url_cliente = f"https://ffkaraoke-cliente.streamlit.app/?prestador={slug}"
-    st.info(f"Link do cliente: {url_cliente}")
-
-    # Gerar QR Code
-    qr = qrcode.QRCode(version=1, box_size=10, border=5)
-    qr.add_data(url_cliente)
-    qr.make(fit=True)
-    img = qr.make_image(fill_color="white", back_color="#0e0e0e")
+    st.info(f"Link de acesso para seus clientes:")
+    st.code(url_cliente)
+    
+    qr = qrcode.make(url_cliente)
     buf = BytesIO()
-    img.save(buf, format="PNG")
-    st.write("### Escaneie para pedir músicas:")
-    st.image(buf.getvalue(), width=200)
+    qr.save(buf, format="PNG")
+    st.image(buf.getvalue(), width=150, caption="QR Code do Prestador")
 
-    # Interface de Busca
+    st.divider()
+
+    # 2. FILA DE PEDIDOS (Conexão Firebase)
+    st.subheader("📋 Pedidos Recebidos")
+    url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{slug}.json"
+    if st.button("🔄 Atualizar Fila"):
+        try:
+            resp = requests.get(url_fila)
+            pedidos = resp.json()
+            if pedidos:
+                for chave, p in pedidos.items():
+                    st.success(f"🎤 {p.get('cantor')}: {p.get('musica')}")
+            else:
+                st.write("Nenhum pedido novo.")
+        except:
+            st.error("Erro ao buscar fila.")
+
+    # 3. BUSCA NA NUVEM
     st.markdown('<div class="big-box">', unsafe_allow_html=True)
     st.subheader("🔍 Pesquisar na Nuvem")
     termo = st.text_input("Nome da Música:")
-    
-    if st.button("Buscar na Biblioteca"):
-        with st.spinner('Procurando na nuvem...'):
-            st.session_state["resultados"] = buscar_musicas(termo)
+    if st.button("Buscar"):
+        st.session_state["resultados"] = buscar_musicas(termo)
     
     if "resultados" in st.session_state:
-        selecionada = st.selectbox("Selecione a música:", st.session_state["resultados"])
-        if st.button("Adicionar à Lista"):
-            st.success(f"Adicionado: {selecionada}")
+        selecionada = st.selectbox("Resultado:", st.session_state["resultados"])
+        st.info(f"Música selecionada para o cliente: {selecionada}")
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("Sair"):
