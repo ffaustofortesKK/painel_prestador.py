@@ -5,7 +5,7 @@ from supabase import create_client
 import requests
 from bs4 import BeautifulSoup
 
-# Configuração do Supabase (Usar st.secrets)
+# Configuração do Supabase (Usar Secrets do Streamlit Cloud)
 url = st.secrets["URL_SUPABASE"]
 key = st.secrets["KEY_SUPABASE"]
 supabase = create_client(url, key)
@@ -31,69 +31,71 @@ def buscar_musicas(termo):
         resultados = [item.text.strip() for item in soup.find_all(['a', 'div', 'span']) if termo.lower() in item.text.lower()]
         return list(set(resultados[:10])) if resultados else ["Nenhuma música encontrada."]
     except Exception as e:
-        return [f"Erro: {e}"]
+        return [f"Erro na busca: {e}"]
 
 # Inicializar sessão
 if "prestador_id" not in st.session_state:
-    st.session_state["prestador_id"] = None
+    st.session_state.prestador_id = None
 
 # --- FLUXO PRINCIPAL ---
-if st.session_state["prestador_id"] is None:
+if st.session_state.prestador_id is None:
     st.title("🎤 Portal do Prestador")
     nome = st.text_input("Nome de Usuário:")
     senha = st.text_input("Senha:", type="password")
+    
     if st.button("Entrar"):
         res = supabase.table("prestadores").select("*").eq("nome_prestador", nome).eq("senha_acesso", senha).execute()
         if res.data:
-            st.session_state["prestador_id"] = res.data[0]["id"]
-            st.session_state["nome"] = res.data[0]["nome_prestador"]
-            st.session_state["slug"] = res.data[0]["slug_unico"]
+            st.session_state.update({
+                "prestador_id": res.data[0]["id"],
+                "nome": res.data[0]["nome_prestador"],
+                "slug": res.data[0]["slug_unico"]
+            })
             st.rerun()
         else:
             st.error("Credenciais inválidas!")
 else:
-    st.title(f"Bem-vindo, {st.session_state['nome']}!")
-    slug = st.session_state["slug"]
+    st.title(f"Bem-vindo, {st.session_state.nome}!")
     
     # 1. LINK E QR CODE
-    url_cliente = f"https://ffkaraoke-cliente.streamlit.app/?prestador={slug}"
-    st.info(f"Link de acesso para seus clientes:")
+    url_cliente = f"https://ffkaraoke-cliente.streamlit.app/?prestador={st.session_state.slug}"
+    st.info("Link de acesso para seus clientes:")
     st.code(url_cliente)
     
     qr = qrcode.make(url_cliente)
     buf = BytesIO()
     qr.save(buf, format="PNG")
-    st.image(buf.getvalue(), width=150, caption="QR Code do Prestador")
+    st.image(buf.getvalue(), width=150, caption="QR Code")
 
     st.divider()
 
-    # 2. FILA DE PEDIDOS
+    # 2. FILA DE PEDIDOS (Manual - evita o erro de renderização automática)
     st.subheader("📋 Pedidos Recebidos")
-    url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{slug}.json"
     if st.button("🔄 Atualizar Fila"):
+        url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}.json"
         try:
             resp = requests.get(url_fila)
             pedidos = resp.json()
-            if pedidos:
+            if pedidos and isinstance(pedidos, dict):
                 for chave, p in pedidos.items():
                     st.success(f"🎤 {p.get('cantor')}: {p.get('musica')}")
             else:
                 st.write("Nenhum pedido novo.")
-        except:
-            st.error("Erro ao buscar fila.")
+        except Exception:
+            st.error("Erro ao carregar pedidos.")
 
     # 3. BUSCA
     st.markdown('<div class="big-box">', unsafe_allow_html=True)
     st.subheader("🔍 Pesquisar na Nuvem")
     termo = st.text_input("Nome da Música:")
     if st.button("Buscar"):
-        st.session_state["resultados"] = buscar_musicas(termo)
+        st.session_state.resultados = buscar_musicas(termo)
     
     if "resultados" in st.session_state:
-        selecionada = st.selectbox("Resultado:", st.session_state["resultados"])
+        selecionada = st.selectbox("Resultado:", st.session_state.resultados)
         st.info(f"Música selecionada: {selecionada}")
     st.markdown('</div>', unsafe_allow_html=True)
 
     if st.button("Sair"):
-        st.session_state["prestador_id"] = None
+        st.session_state.prestador_id = None
         st.rerun()
