@@ -40,18 +40,24 @@ if st.session_state.prestador_id is None:
 else:
     st.title(f"Bem-vindo, {st.session_state.nome}!")
     
-    # URL ATUALIZADA AQUI:
+    # Geração das URLs Dinâmicas
     url_cliente = f"https://appcliente.streamlit.app/?prestador={st.session_state.slug}"
+    url_tv = f"https://ffktela.streamlit.app/?prestador={st.session_state.slug}"
     
+    # Exibição dos Links
     col_link, col_qr = st.columns([2, 1])
     with col_link:
         st.info("🔗 Link de Acesso para seus Clientes:")
         st.code(url_cliente)
+        
+        st.info("📺 Link para a sua TV (Abra no navegador da TV):")
+        st.code(url_tv)
+        
     with col_qr:
         qr = qrcode.make(url_cliente)
         buf = BytesIO()
         qr.save(buf, format="PNG")
-        st.image(buf.getvalue(), width=120, caption="QR Code")
+        st.image(buf.getvalue(), width=120, caption="QR Code Cliente")
 
     st.divider()
     st.subheader("📋 Gestão de Fila")
