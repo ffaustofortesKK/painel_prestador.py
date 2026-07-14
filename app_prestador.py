@@ -3,6 +3,7 @@ import qrcode
 from io import BytesIO
 from supabase import create_client
 import requests
+import time
 
 # Configuração Supabase
 url = st.secrets["URL_SUPABASE"]
@@ -60,7 +61,9 @@ else:
     if st.button("🔄 Atualizar Fila"):
         st.rerun()
     
-    url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}.json"
+    base_url = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
+    url_fila = f"{base_url}/pedidos_{st.session_state.slug}.json"
+    url_status = f"{base_url}/status_{st.session_state.slug}.json"
     
     try:
         pedidos_data = requests.get(url_fila).json()
@@ -71,14 +74,19 @@ else:
                 
                 # Remover
                 if col2.button("🗑️", key=f"del_{p_id}"):
-                    requests.delete(f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}/{p_id}.json")
+                    requests.delete(f"{base_url}/pedidos_{st.session_state.slug}/{p_id}.json")
                     st.rerun()
                 
                 # Anunciar na TV
                 if col3.button("🎤", key=f"start_{p_id}", help="Anunciar e Iniciar"):
-                    requests.patch(f"https://grupoffkaraoke-default-rtdb.firebaseio.com/status_{st.session_state.slug}.json", 
-                                   json={"acao": "contagem", "cantor": p.get('cantor')})
+                    # Envia sinal para a TV
+                    requests.patch(url_status, json={"acao": "contagem", "cantor": p.get('cantor')})
                     st.success("Enviado para TV!")
+                    
+                    # Opcional: Auto-limpar status da TV após 5 segundos para o próximo anúncio
+                    time.sleep(5)
+                    requests.patch(url_status, json={"acao": "aguardando", "cantor": ""})
+                    st.rerun()
         else: 
             st.write("Fila vazia.")
     except: 
