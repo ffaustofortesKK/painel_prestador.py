@@ -81,7 +81,13 @@ else:
                     st.rerun()
                 
                 if col3.button("🎤", key=f"start_{p_id}", help="Anunciar na TV"):
-                    requests.put(url_status, json={"acao": "contagem", "cantor": p.get('cantor'), "musica": p.get('musica')})
+                    # Aqui incluímos o campo 'url_video' para a TV conseguir reproduzir
+                    requests.put(url_status, json={
+                        "acao": "contagem", 
+                        "cantor": p.get('cantor'), 
+                        "musica": p.get('musica'),
+                        "url_video": p.get('link_do_video', '') 
+                    })
                     st.success("Enviado para TV!")
                     st.rerun()
         else: 
