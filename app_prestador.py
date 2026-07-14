@@ -38,7 +38,6 @@ if st.session_state.prestador_id is None:
             except Exception as e:
                 st.error(f"Erro: {e}")
 else:
-    # --- PAINEL PRINCIPAL ---
     st.title(f"Bem-vindo, {st.session_state.nome}!")
     
     url_cliente = f"https://ffkaraoke-cliente.streamlit.app/?prestador={st.session_state.slug}"
@@ -70,17 +69,15 @@ else:
                 col1, col2, col3 = st.columns([4, 1, 1])
                 col1.write(f"🎤 {p.get('cantor')} - {p.get('musica')}")
                 
-                # Remover da fila
                 if col2.button("🗑️", key=f"del_{p_id}"):
                     requests.delete(f"{base_url}/pedidos_{st.session_state.slug}/{p_id}.json")
                     st.rerun()
                 
-                # Anunciar na TV
-                if col3.button("🎤", key=f"start_{p_id}", help="Anunciar e Iniciar"):
-                    # Apenas envia o sinal. A TV cuidará de exibir e limpar após o tempo necessário.
-                    requests.put(url_status, json={"acao": "contagem", "cantor": p.get('cantor')})
+                if col3.button("🎤", key=f"start_{p_id}", help="Anunciar na TV"):
+                    # Envia cantor E música para a TV
+                    requests.put(url_status, json={"acao": "contagem", "cantor": p.get('cantor'), "musica": p.get('musica')})
                     st.success("Enviado para TV!")
-                    st.rerun() # Recarrega apenas para mostrar o sucesso
+                    st.rerun()
         else: 
             st.write("Fila vazia.")
     except Exception as e:
