@@ -1,217 +1,89 @@
 import streamlit as st
-
 import qrcode
-
 from io import BytesIO
-
 from supabase import create_client
-
 import requests
 
-
-
 # Configuração do Supabase
-
 url = st.secrets["URL_SUPABASE"]
-
 key = st.secrets["KEY_SUPABASE"]
-
 supabase = create_client(url, key)
 
+st.set_page_config(page_title="Painel do Prestador", layout="wide")
 
+# --- INICIALIZAÇÃO SEGURA DO ESTADO ---
+if "prestador_id" not in st.session_state: st.session_state.prestador_id = None
+if "nome" not in st.session_state: st.session_state.nome = None
+if "slug" not in st.session_state: st.session_state.slug = None
 
-st.set_page_config(page_title="Painel do Prestador", layout="centered")
-
-
-
-# Inicialização de estado
-
-if "prestador_id" not in st.session_state: 
-
-    st.session_state.prestador_id = None
-
-if "nome" not in st.session_state: 
-
-    st.session_state.nome = None
-
-if "slug" not in st.session_state: 
-
-    st.session_state.slug = None
-
-
-
-# --- LOGIN / REGISTRO AUTOMÁTICO ---
-
+# --- LOGIN / REGISTRO ---
 if st.session_state.prestador_id is None:
-
     st.title("🎤 Portal do Prestador")
-
-    
-
     nome_input = st.text_input("Nome:")
-
     sobrenome_input = st.text_input("Sobrenome:") 
-
     telef = st.text_input("Telefone:")
-
     
-
     if st.button("Entrar"):
-
         if nome_input and sobrenome_input and telef:
-
             try:
-
-                # 1. Tenta buscar pelo telefone
-
                 res = supabase.table("prestadores").select("*").eq("telefone", telef).execute()
-
-                
-
                 if res.data and len(res.data) > 0:
-
-                    st.session_state.update({
-
-                        "prestador_id": res.data[0]["id"],
-
-                        "nome": f"{nome_input} {sobrenome_input}",
-
-                        "slug": res.data[0]["slug_unico"]
-
-                    })
-
+                    st.session_state.update({"prestador_id": res.data[0]["id"], "nome": f"{nome_input} {sobrenome_input}", "slug": res.data[0]["slug_unico"]})
                     st.rerun()
-
                 else:
-
-                    # 2. Cadastro automático
-
                     slug_novo = f"{nome_input.lower()}-{sobrenome_input.lower()}"
-
-                    novo_prestador = {
-
-                        "Nome": nome_input,
-
-                        "Sobrenome": sobrenome_input,
-
-                        "telefone": telef,
-
-                        "slug_unico": slug_novo
-
-                    }
-
-                    supabase.table("prestadores").insert(novo_prestador).execute()
-
-                    
-
-                    # Busca o ID após inserir
-
-                    res = supabase.table("prestadores").select("*").eq("telefone", telef).execute()
-
-                    if res.data:
-
-                        st.session_state.update({
-
-                            "prestador_id": res.data[0]["id"],
-
-                            "nome": f"{nome_input} {sobrenome_input}",
-
-                            "slug": slug_novo
-
-                        })
-
-                        st.success("Cadastro realizado com sucesso!")
-
-                        st.rerun()
-
+                    supabase.table("prestadores").insert({"Nome": nome_input, "Sobrenome": sobrenome_input, "telefone": telef, "slug_unico": slug_novo}).execute()
+                    st.session_state.update({"nome": f"{nome_input} {sobrenome_input}", "slug": slug_novo})
+                    st.rerun()
             except Exception as e:
-
-                st.error(f"Erro no banco: {e}")
-
-        else:
-
-            st.error("⚠️ Preencha todos os campos.")
-
-
+                st.error(f"Erro: {e}")
 
 else:
-
     # --- PAINEL PRINCIPAL ---
-
     st.title(f"Bem-vindo, {st.session_state.nome}!")
-
     
-
-    # Gerador de Link Dinâmico
-
+    url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}.json"
+    
+    # Exibir Link e QR Code
     url_cliente = f"https://ffkaraoke-cliente.streamlit.app/?prestador={st.session_state.slug}"
+    with st.expander("🔗 Link de Acesso"):
+        st.code(url_cliente)
+        qr = qrcode.make(url_cliente)
+        buf = BytesIO()
+        qr.save(buf, format="PNG")
+        st.image(buf.getvalue(), width=120)
 
-    st.info("Link de acesso para seus clientes:")
-
-    st.code(url_cliente)
-
+    st.subheader("📋 Gestão de Fila")
     
-
-    # QR Code
-
-    qr = qrcode.make(url_cliente)
-
-    buf = BytesIO()
-
-    qr.save(buf, format="PNG")
-
-    st.image(buf.getvalue(), width=150)
-
-
-
-    st.divider()
-
-    st.subheader("📋 Pedidos Recebidos")
-
-    
-
-    # Botão para atualizar a fila específica
-
     if st.button("🔄 Atualizar Fila"):
-
-        # URL da fila específica deste prestador no Firebase
-
-        url_fila = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}.json"
-
+        st.rerun()
         
-
-        try:
-
-            resposta = requests.get(url_fila)
-
-            pedidos = resposta.json()
-
+    try:
+        pedidos_data = requests.get(url_fila).json()
+        if pedidos_data:
+            # Lista de pedidos para manipulação
+            lista_pedidos = list(pedidos_data.items())
             
-
-            if pedidos:
-
-                # Exibe os pedidos
-
-                for chave, p in pedidos.items():
-
-                    st.success(f"🎤 **{p.get('cantor')}**: {p.get('musica')}")
-
-            else:
-
-                st.write("Fila vazia no momento.")
-
-        except Exception as e:
-
-            st.error("Erro ao carregar pedidos. Verifique sua conexão.")
-
-
-
-    st.divider()
+            for i, (p_id, p) in enumerate(lista_pedidos):
+                col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
+                col1.write(f"**{i+1}.** {p.get('cantor')} - {p.get('musica')}")
+                
+                # Ação: Remover
+                if col2.button("🗑️", key=f"del_{p_id}"):
+                    requests.delete(f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{st.session_state.slug}/{p_id}.json")
+                    st.rerun()
+                
+                # Ação: Anunciar e Iniciar (Envia para o Firebase da TV)
+                if col3.button("🎤", key=f"start_{p_id}", help="Anunciar e Iniciar Contagem"):
+                    requests.patch(f"https://grupoffkaraoke-default-rtdb.firebaseio.com/status_{st.session_state.slug}.json", 
+                                   json={"acao": "contagem", "cantor": p.get('cantor')})
+                    st.success("Enviado para TV!")
+                    
+        else:
+            st.write("Fila vazia.")
+    except:
+        st.error("Erro ao conectar com a fila.")
 
     if st.button("Sair"):
-
-        for key in list(st.session_state.keys()):
-
-            del st.session_state[key]
-
+        st.session_state.clear()
         st.rerun()
