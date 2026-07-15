@@ -51,14 +51,29 @@ if st.session_state.nome is None:
             st.rerun()
 else:
     st.title(f"Bem-vindo, {st.session_state.nome}!")
+    
+    # --- GERADOR DE LINKS ---
+    url_cliente = f"https://appcliente.streamlit.app/?prestador={st.session_state.slug}"
+    url_tv = f"https://ffktela.streamlit.app/?prestador={st.session_state.slug}"
+    
+    col_l1, col_l2 = st.columns([2, 1])
+    with col_l1:
+        st.info(f"🔗 Link Cliente: {url_cliente}")
+        st.info(f"📺 Link TV: {url_tv}")
+    with col_l2:
+        qr = qrcode.make(url_cliente)
+        buf = BytesIO()
+        qr.save(buf, format="PNG")
+        st.image(buf.getvalue(), width=100, caption="QR Code Cliente")
+    
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
+    st.divider()
     st.subheader("📋 Gestão de Fila")
     pedidos_data = requests.get(f"{BASE_URL}/pedidos_{st.session_state.slug}.json").json()
     
     if pedidos_data:
         for p_id, p in pedidos_data.items():
-            # AS COLUNAS DEVEM SER CRIADAS DENTRO DO LOOP
             col1, col2, col3 = st.columns([4, 1, 1])
             nome_musica = p.get('musica')
             col1.write(f"🎤 {p.get('cantor')} - {nome_musica}")
@@ -81,7 +96,7 @@ else:
     else:
         st.write("Fila vazia.")
 
-    # --- CONTROLO REMOTO (FORA DO LOOP, USANDO PATCH) ---
+    # --- CONTROLO REMOTO ---
     st.divider()
     st.subheader("🎮 Controlo Remoto da TV")
     col_c1, col_c2, col_c3, col_c4, col_c5 = st.columns(5)
