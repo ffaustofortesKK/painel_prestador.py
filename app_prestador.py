@@ -48,7 +48,11 @@ else:
         st.info("📺 Link para a sua TV:")
         st.code(url_tv)
     with col_qr:
-        st.image(BytesIO(qrcode.make(url_cliente).save(BytesIO(), format="PNG").getvalue()), width=120)
+        # Correção do erro do QR Code
+        qr = qrcode.make(url_cliente)
+        buf = BytesIO()
+        qr.save(buf, format="PNG")
+        st.image(buf.getvalue(), width=120, caption="QR Code Cliente")
 
     st.divider()
     st.subheader("📋 Gestão de Fila")
@@ -73,8 +77,13 @@ else:
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
                     # BUSCA AUTOMÁTICA NO SUPABASE
+                    # Certifique-se que a sua tabela no Supabase chama-se 'musicas' 
+                    # e tem as colunas 'nome' e 'link'
                     musica_db = supabase.table("musicas").select("link").eq("nome", nome_musica).execute()
-                    link_encontrado = musica_db.data[0]["link"] if musica_db.data else ""
+                    
+                    link_encontrado = ""
+                    if musica_db.data and len(musica_db.data) > 0:
+                        link_encontrado = musica_db.data[0]["link"]
                     
                     if link_encontrado:
                         requests.put(url_status, json={
@@ -83,10 +92,10 @@ else:
                             "musica": nome_musica,
                             "url_video": link_encontrado
                         })
-                        st.success("Enviado para TV!")
+                        st.success(f"Enviado para TV: {nome_musica}")
                         st.rerun()
                     else:
-                        st.error(f"Vídeo de '{nome_musica}' não encontrado no banco de dados!")
+                        st.error(f"Vídeo de '{nome_musica}' não encontrado na tabela 'musicas' do Supabase!")
         else: 
             st.write("Fila vazia.")
     except Exception as e:
