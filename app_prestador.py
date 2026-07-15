@@ -30,14 +30,18 @@ def normalizar_nome(nome):
     return nome
 
 def encontrar_link_real(nome_base):
-    """Procura no Cloudinary pelo ficheiro que começa com o nome da música."""
+    """Procura no Cloudinary pelo ficheiro e otimiza a URL para streaming."""
     try:
-        # Busca recursos que começam com o nome normalizado
         resources = cloudinary.api.resources(
             type="upload", resource_type="video", prefix=nome_base, max_results=1
         )
         if resources['resources']:
-            return resources['resources'][0]['secure_url']
+            # Pega a URL original
+            url = resources['resources'][0]['secure_url']
+            # OTIMIZAÇÃO: Injeta parâmetros de streaming para evitar cortes de 5 segundos
+            # Substitui 'upload/' por 'upload/f_auto,q_auto/streaming/'
+            url_otimizada = url.replace("/upload/", "/upload/f_auto,q_auto/streaming/")
+            return url_otimizada
     except Exception as e:
         st.error(f"Erro na API Cloudinary: {e}")
     return None
@@ -98,7 +102,7 @@ else:
                 if col3.button("🎤", key=f"start_{p_id}"):
                     nome_base = normalizar_nome(nome_musica)
                     
-                    # BUSCA INTELIGENTE:
+                    # BUSCA INTELIGENTE COM OTIMIZAÇÃO DE STREAMING
                     link_real = encontrar_link_real(nome_base)
                     
                     if link_real:
@@ -108,7 +112,7 @@ else:
                             "musica": nome_musica,
                             "url_video": link_real
                         })
-                        st.success(f"Enviado para TV: {nome_musica}")
+                        st.success(f"Enviado para TV (Streaming Ativo): {nome_musica}")
                     else:
                         st.error(f"Não encontrei o vídeo: {nome_base} no Cloudinary.")
                     st.rerun()
