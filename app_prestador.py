@@ -14,7 +14,6 @@ if "slug" not in st.session_state: st.session_state.slug = None
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 CLOUDINARY_CLOUD_NAME = "yhwgjh7g"
 
-# FUNÇÃO: Remove acentos e padroniza o nome
 def normalizar_nome(nome):
     nome = nome.replace(".mp4", "")
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
@@ -32,17 +31,14 @@ if st.session_state.nome is None:
     if st.button("Entrar"):
         if nome_input and sobrenome_input and telef:
             slug_unico = f"{nome_input.lower()}-{sobrenome_input.lower()}"
-            
             data_prestador = {"nome": f"{nome_input} {sobrenome_input}", "telefone": telef, "slug": slug_unico}
             telef_limpo = telef.replace(" ", "").replace("-", "")
             requests.put(f"{BASE_URL}/prestadores/{telef_limpo}.json", json=data_prestador)
-            
             st.session_state.update({"nome": f"{nome_input} {sobrenome_input}", "slug": slug_unico})
             st.rerun()
 else:
     st.title(f"Bem-vindo, {st.session_state.nome}!")
     
-    # Links de Acesso
     url_cliente = f"https://appcliente.streamlit.app/?prestador={st.session_state.slug}"
     url_tv = f"https://ffktela.streamlit.app/?prestador={st.session_state.slug}"
     
@@ -79,20 +75,17 @@ else:
                     st.rerun()
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
-                    # 1. Normaliza o nome para encontrar no Cloudinary
+                    # Normalizamos o nome
                     nome_tecnico = normalizar_nome(nome_musica)
                     
-                    # 2. Monta a URL (Assumindo que o ficheiro no Cloudinary tem o nome sem acentos/pontuação)
-                    # NOTA: Se ainda tiver problemas com o final "_xxxxx", 
-                    # é porque o Cloudinary adicionou um ID único.
-                    link_montado = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{nome_tecnico}"
-                    
-                    # 3. ENVIA PARA A TV (Isto faz a TV disparar o vídeo)
+                    # ENVIAMOS O NOME NORMALIZADO EM VEZ DO LINK COMPLETO
+                    # A TV (ffktela) deve ser programada para pegar este 'nome_tecnico'
+                    # e montar o link lá. Isso evita problemas de sufixos aleatórios.
                     requests.put(url_status, json={
                         "acao": "contagem", 
                         "cantor": p.get('cantor'), 
                         "musica": nome_musica,
-                        "url_video": link_montado
+                        "nome_tecnico": nome_tecnico
                     })
                     st.success(f"Enviado para TV: {nome_musica}")
                     st.rerun()
