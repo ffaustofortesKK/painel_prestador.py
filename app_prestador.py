@@ -1,5 +1,6 @@
 import streamlit as st
 import qrcode
+import re
 from io import BytesIO
 import requests
 
@@ -11,8 +12,17 @@ if "slug" not in st.session_state: st.session_state.slug = None
 
 # URL BASE do Firebase
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
-# Cloud Name do seu Cloudinary
 CLOUDINARY_CLOUD_NAME = "yhwgjh7g"
+
+# Função para formatar o nome da música para o padrão do Cloudinary
+def normalizar_nome(nome):
+    # Remove o .mp4 se existir
+    nome = nome.replace(".mp4", "")
+    # Remove caracteres especiais (deixa letras, números e espaços)
+    nome = re.sub(r'[^\w\s]', '', nome)
+    # Substitui espaços por underline (_)
+    nome = "_".join(nome.split())
+    return nome
 
 # --- LOGIN SIMPLIFICADO ---
 if st.session_state.nome is None:
@@ -68,13 +78,13 @@ else:
                 
                 # Botão Iniciar (Tocar na TV)
                 if col3.button("🎤", key=f"start_{p_id}"):
-                    # Remove .mp4 do nome para montar a URL corretamente
-                    nome_limpo = nome_musica.replace(".mp4", "")
+                    # Aplica a normalização para casar com o formato do Cloudinary
+                    nome_tecnico = normalizar_nome(nome_musica)
                     
-                    # Constrói o link direto do Cloudinary
-                    link_montado = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{nome_limpo}"
+                    # Constrói o link. NOTA: Adicionei o sufixo _jmzrrn caso todos tenham esse padrão, 
+                    # mas se não for em todos, remova o "+ '_jmzrrn'" abaixo.
+                    link_montado = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{nome_tecnico}_jmzrrn"
                     
-                    # Envia o comando para a TV
                     requests.put(url_status, json={
                         "acao": "contagem", 
                         "cantor": p.get('cantor'), 
