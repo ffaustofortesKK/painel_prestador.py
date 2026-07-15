@@ -7,7 +7,7 @@ import cloudinary.api
 from io import BytesIO
 import requests
 
-# Configuração Cloudinary com as suas chaves
+# Configuração Cloudinary
 cloudinary.config( 
   cloud_name = "yhwgjh7g", 
   api_key = "347924379441394", 
@@ -30,18 +30,15 @@ def normalizar_nome(nome):
     return nome
 
 def encontrar_link_real(nome_base):
-    """Procura no Cloudinary pelo ficheiro e otimiza a URL para streaming."""
+    """Procura no Cloudinary e devolve o LINK DIRETO DO FICHEIRO ORIGINAL."""
     try:
         resources = cloudinary.api.resources(
             type="upload", resource_type="video", prefix=nome_base, max_results=1
         )
         if resources['resources']:
-            # Pega a URL original
-            url = resources['resources'][0]['secure_url']
-            # OTIMIZAÇÃO: Injeta parâmetros de streaming para evitar cortes de 5 segundos
-            # Substitui 'upload/' por 'upload/f_auto,q_auto/streaming/'
-            url_otimizada = url.replace("/upload/", "/upload/f_auto,q_auto/streaming/")
-            return url_otimizada
+            # Retorna a URL original intacta.
+            # Sem parâmetros de conversão, o browser da TV trata o ficheiro como um MP4 comum.
+            return resources['resources'][0]['secure_url']
     except Exception as e:
         st.error(f"Erro na API Cloudinary: {e}")
     return None
@@ -102,7 +99,7 @@ else:
                 if col3.button("🎤", key=f"start_{p_id}"):
                     nome_base = normalizar_nome(nome_musica)
                     
-                    # BUSCA INTELIGENTE COM OTIMIZAÇÃO DE STREAMING
+                    # BUSCA PELO LINK ORIGINAL (Sem processamento extra)
                     link_real = encontrar_link_real(nome_base)
                     
                     if link_real:
@@ -112,9 +109,9 @@ else:
                             "musica": nome_musica,
                             "url_video": link_real
                         })
-                        st.success(f"Enviado para TV (Streaming Ativo): {nome_musica}")
+                        st.success(f"Enviado para TV: {nome_musica}")
                     else:
-                        st.error(f"Não encontrei o vídeo: {nome_base} no Cloudinary.")
+                        st.error(f"Vídeo não encontrado: {nome_base}")
                     st.rerun()
         else: 
             st.write("Fila vazia.")
