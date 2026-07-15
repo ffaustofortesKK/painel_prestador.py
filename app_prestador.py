@@ -11,7 +11,7 @@ if "slug" not in st.session_state: st.session_state.slug = None
 
 # URL BASE do Firebase
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
-# Substitua pelo seu Cloud Name real do Cloudinary
+# Cloud Name do seu Cloudinary
 CLOUDINARY_CLOUD_NAME = "yhwgjh7g"
 
 # --- LOGIN SIMPLIFICADO ---
@@ -68,9 +68,11 @@ else:
                 
                 # Botão Iniciar (Tocar na TV)
                 if col3.button("🎤", key=f"start_{p_id}"):
-                    # Construção automática da URL do Cloudinary
-                    # O Cloudinary entende o nome do arquivo diretamente na URL
-                    link_montado = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{nome_musica}"
+                    # Remove .mp4 do nome para montar a URL corretamente
+                    nome_limpo = nome_musica.replace(".mp4", "")
+                    
+                    # Constrói o link direto do Cloudinary
+                    link_montado = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{nome_limpo}"
                     
                     # Envia o comando para a TV
                     requests.put(url_status, json={
