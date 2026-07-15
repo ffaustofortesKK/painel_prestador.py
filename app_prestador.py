@@ -2,8 +2,17 @@ import streamlit as st
 import qrcode
 import re
 import unicodedata
+import cloudinary
+import cloudinary.api
 from io import BytesIO
 import requests
+
+# Configuração Cloudinary com as suas chaves
+cloudinary.config( 
+  cloud_name = "yhwgjh7g", 
+  api_key = "347924379441394", 
+  api_secret = "_gzZOnOmzIk6dlmferYm6ck8S08"
+)
 
 st.set_page_config(page_title="Painel do Prestador", layout="wide")
 
@@ -12,17 +21,26 @@ if "nome" not in st.session_state: st.session_state.nome = None
 if "slug" not in st.session_state: st.session_state.slug = None
 
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
-CLOUDINARY_CLOUD_NAME = "yhwgjh7g"
 
 def normalizar_nome(nome):
     nome = nome.replace(".mp4", "")
-    # Remove acentos
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    # Remove caracteres especiais
     nome = re.sub(r'[^\w\s]', '', nome)
-    # Substitui espaços por underline
     nome = "_".join(nome.split())
     return nome
+
+def encontrar_link_real(nome_base):
+    """Procura no Cloudinary pelo ficheiro que começa com o nome da música."""
+    try:
+        # Busca recursos que começam com o nome normalizado
+        resources = cloudinary.api.resources(
+            type="upload", resource_type="video", prefix=nome_base, max_results=1
+        )
+        if resources['resources']:
+            return resources['resources'][0]['secure_url']
+    except Exception as e:
+        st.error(f"Erro na API Cloudinary: {e}")
+    return None
 
 # --- LOGIN ---
 if st.session_state.nome is None:
@@ -34,11 +52,9 @@ if st.session_state.nome is None:
     if st.button("Entrar"):
         if nome_input and sobrenome_input and telef:
             slug_unico = f"{nome_input.lower()}-{sobrenome_input.lower()}"
-            
             data_prestador = {"nome": f"{nome_input} {sobrenome_input}", "telefone": telef, "slug": slug_unico}
             telef_limpo = telef.replace(" ", "").replace("-", "")
             requests.put(f"{BASE_URL}/prestadores/{telef_limpo}.json", json=data_prestador)
-            
             st.session_state.update({"nome": f"{nome_input} {sobrenome_input}", "slug": slug_unico})
             st.rerun()
 else:
@@ -80,18 +96,21 @@ else:
                     st.rerun()
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
-                    nome_tecnico = normalizar_nome(nome_musica)
+                    nome_base = normalizar_nome(nome_musica)
                     
-                    # Enviamos o nome técnico e a extensão esperada para a TV
-                    # Isso permite que a TV monte o link dinamicamente
-                    requests.put(url_status, json={
-                        "acao": "contagem", 
-                        "cantor": p.get('cantor'), 
-                        "musica": nome_musica,
-                        "nome_tecnico": nome_tecnico,
-                        "extensao": ".mp4"
-                    })
-                    st.success(f"Enviado para TV: {nome_musica}")
+                    # BUSCA INTELIGENTE:
+                    link_real = encontrar_link_real(nome_base)
+                    
+                    if link_real:
+                        requests.put(url_status, json={
+                            "acao": "contagem", 
+                            "cantor": p.get('cantor'), 
+                            "musica": nome_musica,
+                            "url_video": link_real
+                        })
+                        st.success(f"Enviado para TV: {nome_musica}")
+                    else:
+                        st.error(f"Não encontrei o vídeo: {nome_base} no Cloudinary.")
                     st.rerun()
         else: 
             st.write("Fila vazia.")
