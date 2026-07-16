@@ -63,11 +63,11 @@ else:
             
             if col3.button("🎤", key=f"start_{p_id}"):
                 # --- ANÚNCIO POR VOZ (LOUTOR) ---
-                msg_voz = m"Senhoras e senhores Agora no palco do melhor karaoke para voces! , {p.get('cantor')}, vai cantar {p.get('musica')}"
-                st.components.v1.html(m"""
+                msg_voz = f"Senhoras e Senhores,Agora no palco, {p.get('cantor')}, cantando {p.get('musica')}"
+                st.components.v1.html(f"""
                     <script>
                         var msg = new SpeechSynthesisUtterance("{msg_voz}");
-                        msg.lang = 'pt-BR';
+                        msg.lang = 'pt-PT';
                         window.speechSynthesis.speak(msg);
                     </script>
                 """, height=0)
