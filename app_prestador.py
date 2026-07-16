@@ -49,7 +49,6 @@ if st.session_state.nome is None:
                 st.session_state.slug = slug_unico
                 st.rerun()
 else:
-    # Cabeçalho fixo com o nome do prestador
     st.sidebar.title("Configurações")
     if st.sidebar.button("Sair (Limpar Sessão)"):
         st.session_state.nome = None
@@ -80,18 +79,24 @@ else:
                 requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
             
             if col3.button("🎤", key=f"start_{p_id}"):
-                # Efeito de anúncio
-                texto_anuncio = f"Senhoras e senhores! Agora no palco, {p.get('cantor')}! Grande salva de palmas para {p.get('musica')}!"
+                # Efeito de anúncio Estilo Herman José
+                texto_anuncio = f"Senhoras e senhores, meus amigos! É um privilégio enorme receber aqui no nosso palco, o magnífico, o extraordinário {p.get('cantor')}! Que nos vai presentear com o tema {p.get('musica')}. Uma salva de palmas, por favor!"
+                
                 st.components.v1.html(f"""
                     <script>
-                        var audio = new Audio('https://www.myinstants.com/media/sounds/applause.mp3');
-                        audio.play();
-                        setTimeout(() => {{
-                            var msg = new SpeechSynthesisUtterance("{texto_anuncio}");
-                            msg.lang = 'pt-PT';
-                            msg.pitch = 0.8;
-                            window.speechSynthesis.speak(msg);
-                        }}, 500);
+                        // Função para falar e depois tocar palmas
+                        var msg = new SpeechSynthesisUtterance("{texto_anuncio}");
+                        msg.lang = 'pt-PT';
+                        msg.pitch = 0.7; // Voz bem masculina e grave
+                        msg.rate = 1.0;  // Ritmo natural
+                        msg.volume = 1.0;
+                        
+                        msg.onend = function() {{
+                            var audio = new Audio('https://www.myinstants.com/media/sounds/applause.mp3');
+                            audio.play();
+                        }};
+                        
+                        window.speechSynthesis.speak(msg);
                     </script>
                 """, height=0)
                 
@@ -109,6 +114,5 @@ else:
     st.subheader("🎮 Controlo Remoto")
     if st.button("🔄 RECOMEÇAR MÚSICA"): requests.patch(url_status, json={"comando": "repeat"})
     
-    # Atualização automática da fila
     time.sleep(5)
     st.rerun()
