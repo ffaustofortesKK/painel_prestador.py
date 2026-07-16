@@ -80,7 +80,7 @@ else:
             
             if col3.button("🎤", key=f"start_{p_id}"):
                 # Efeito de anúncio Estilo Herman José
-                texto_anuncio = f"Senhoras e senhores, meus amigos! É um privilégio enorme receber aqui no nosso palco, o magnífico, o extraordinário {p.get('cantor')}! Que nos vai presentear com o tema {p.get('musica')}. Uma salva de palmas, por favor!"
+                texto_anuncio = f"Senhoras e senhores!Recebam no nosso palco, {p.get('cantor')}! Que vai cantar,  {p.get('musica')}. Canta !"
                 
                 st.components.v1.html(f"""
                     <script>
