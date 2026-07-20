@@ -1,199 +1,125 @@
 import streamlit as st
-
+import qrcode
+import re
+import unicodedata
+import cloudinary
+import cloudinary.api
+from io import BytesIO
 import requests
-
 import time
 
+# Configuração Cloudinary
+cloudinary.config(cloud_name="yhwgjh7g", api_key="347924379441394", api_secret="_gzZOnOmzIk6dlmferYm6ck8S08")
 
+st.set_page_config(page_title="Painel do Prestador", layout="wide")
 
-st.set_page_config(page_title="FF KARAOKE - CLIENTE", layout="centered")
+# Inicialização segura do estado
+if "nome" not in st.session_state: st.session_state.nome = None
+if "slug" not in st.session_state: st.session_state.slug = None
 
+BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 
+def normalizar_nome(nome):
+    nome = nome.replace(".mp4", "")
+    nome = re.sub(r'["\'()\[\]]', '', nome)
+    nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
+    nome = re.sub(r'[^\w\s]', '', nome)
+    return "_".join(nome.split())
 
-if 'registado' not in st.session_state: st.session_state.registado = False
+def encontrar_link_real(nome_base):
+    try:
+        resources = cloudinary.api.resources(type="upload", resource_type="video", prefix=nome_base, max_results=1)
+        if resources['resources']:
+            return resources['resources'][0]['secure_url'] 
+    except: return None
 
-if 'minha_playlist' not in st.session_state: st.session_state.minha_playlist = []
-
-
-
-query_params = st.query_params
-
-prestador_slug = query_params.get("prestador", "geral")
-
-URL_STATUS = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/status_{prestador_slug}.json"
-
-URL_PEDIDOS = f"https://grupoffkaraoke-default-rtdb.firebaseio.com/pedidos_{prestador_slug}.json"
-
-URL_CATALOGO = "https://grupoffkaraoke-default-rtdb.firebaseio.com/catalogo.json"
-
-
-
-@st.cache_data(ttl=300)
-
-def obter_catalogo():
-
-    try:
-
-        res = requests.get(URL_CATALOGO).json()
-
-        return list(res.values()) if isinstance(res, dict) else (res or [])
-
-    except: return []
-
-
-
-if not st.session_state.registado:
-
-    st.title("🎤 FF Karaoke")
-
-    nome = st.text_input("Como quer ser chamado?")
-
-    if st.button("Entrar"):
-
-        if nome: st.session_state.nome = nome; st.session_state.registado = True; st.rerun()
-
+# --- ESTRUTURA DA PÁGINA ---
+if st.session_state.nome is None:
+    st.title("🎤 Portal do Prestador")
+    with st.form("login_form"):
+        nome_input = st.text_input("Nome:")
+        sobrenome_input = st.text_input("Sobrenome:")
+        telef = st.text_input("Telefone:")
+        if st.form_submit_button("Entrar"):
+            if nome_input and sobrenome_input and telef:
+                slug_unico = f"{nome_input.lower()}-{sobrenome_input.lower()}"
+                telef_limpo = telef.replace(" ", "").replace("-", "")
+                requests.put(f"{BASE_URL}/prestadores/{telef_limpo}.json", json={"nome": f"{nome_input} {sobrenome_input}", "slug": slug_unico})
+                st.session_state.nome = f"{nome_input} {sobrenome_input}"
+                st.session_state.slug = slug_unico
+                st.rerun()
 else:
-
-    # Buscar Estado e Pedidos
-
-    try:
-
-        status = requests.get(f"{URL_STATUS}?nocache={time.time()}").json() or {}
-
-        pedidos_json = requests.get(f"{URL_PEDIDOS}?nocache={time.time()}").json() or {}
-
-    except: status = {}; pedidos_json = {}
-
-
-
-    nome_firebase = str(status.get("cantor", "")).strip().lower()
-
-    meu_nome = str(st.session_state.nome).strip().lower()
-
-    
-
-    # Verificar se o utilizador já tem pedido na fila
-
-    fila = list(pedidos_json.items()) if pedidos_json else []
-
-    posicao = next((i for i, (p_id, p) in enumerate(fila) if str(p.get('cantor')).strip().lower() == meu_nome), -1)
-
-
-
-    # 1. VEZ DO CANTOR
-
-    if nome_firebase == meu_nome and status.get("comando") == "aguardando_play":
-
-        st.success("🎉 Próximo és tu, preparado?")
-
-        if st.button("▶️ COMEÇAR A MINHA MÚSICA", use_container_width=True):
-
-            requests.patch(URL_STATUS, json={"comando": "play"})
-
-            st.rerun()
-
-            
-
-    # 2. ESPERANDO NA FILA
-
-    elif posicao != -1:
-
-        st.warning("⚠️ O seu pedido foi enviado. Aguarde a sua vez.")
-
-        if posicao == 0:
-
-            st.info("📢 Estás quase lá, aguarde o sinal para começar.")
-
-        else:
-
-            st.write(f"🔢 Existem **{posicao}** músicas à sua frente.")
-
-            
-
-    # 3. ESTADO NORMAL
-
-    else:
-
-        st.info("Prepare a sua playlist!")
-
-        
-
-        # 1. PLAYLIST ATUAL (MÁX 3)
-
-        st.subheader("Minha Playlist (Máx 3)")
-
-        for i, m in enumerate(st.session_state.minha_playlist):
-
-            col1, col2 = st.columns([4, 1])
-
-            col1.write(f"{i+1}. {m}")
-
-            if col2.button("❌", key=f"rem_{i}"):
-
-                st.session_state.minha_playlist.pop(i); st.rerun()
-
-        
-
-        # 2. PESQUISA
-
-        if len(st.session_state.minha_playlist) < 3:
-
-            termo = st.text_input("🔍 Pesquisar música:")
-
-            resultados = [m for m in obter_catalogo() if termo.lower() in str(m).lower()] if termo else []
-
-            if termo and resultados:
-
-                musica_sel = st.selectbox("Escolha:", resultados)
-
-                if st.button("➕ Adicionar à Playlist"):
-
-                    st.session_state.minha_playlist.append(musica_sel); st.rerun()
-
-        
-
-        st.divider()
-
-        st.subheader("📝 Pedido Personalizado")
-
-        pedido_extra = st.text_area("Não encontrou?")
-
-        
-
-        # LÓGICA DE ENVIO APENAS DE UMA MÚSICA
-
-        if st.button("🚀 Enviar próxima música para o DJ", use_container_width=True):
-
-            if not st.session_state.minha_playlist and not pedido_extra:
-
-                st.warning("Adicione músicas à playlist.")
-
-            else:
-
-                if st.session_state.minha_playlist:
-
-                    # Envia apenas a primeira da lista
-
-                    musica_envio = st.session_state.minha_playlist.pop(0)
-
-                    requests.post(URL_PEDIDOS, json={"cantor": st.session_state.nome, "musica": musica_envio})
-
-                elif pedido_extra:
-
-                    # Envia o personalizado
-
-                    requests.post(URL_PEDIDOS, json={"cantor": st.session_state.nome, "musica": f"PEDIDO: {pedido_extra}"})
-
-                
-
-                st.rerun()
-
-
-
-    st.divider()
-
-    if st.button("Sair"): st.session_state.registado = False; st.rerun()
-
-    
-
-    time.sleep(3); st.rerun()
+    st.sidebar.title("Configurações")
+    if st.sidebar.button("Sair (Limpar Sessão)"):
+        st.session_state.nome = None
+        st.session_state.slug = None
+        st.rerun()
+        
+    st.title(f"🎤 Bem-vindo, {st.session_state.nome}!")
+    st.markdown("---")
+    
+    url_cliente = f"https://appcliente.streamlit.app/?prestador={st.session_state.slug}"
+    url_tv = f"https://ffktela.streamlit.app/?prestador={st.session_state.slug}"
+    
+    c1, c2 = st.columns([2, 1])
+    c1.info(f"🔗 **Cliente:** {url_cliente}")
+    c1.info(f"📺 **TV:** {url_tv}")
+    qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
+    
+    url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
+    st.subheader("📋 Gestão de Fila")
+    
+    pedidos_data = requests.get(f"{BASE_URL}/pedidos_{st.session_state.slug}.json").json() or {}
+    
+    if pedidos_data:
+        for p_id, p in pedidos_data.items():
+            if not str(p.get('musica', '')).startswith("PEDIDO:"):
+                col1, col2, col3 = st.columns([4, 1, 1])
+                col1.write(f"🎤 {p.get('cantor')} - {p.get('musica')}")
+                if col2.button("🗑️", key=f"del_{p_id}"): 
+                    requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
+                
+                if col3.button("🎤", key=f"start_{p_id}"):
+                    link = encontrar_link_real(normalizar_nome(p.get('musica')))
+                    # Ao clicar no botão, enviamos os dados para o status
+                    # O Cliente monitora 'comando': 'aguardando_play' para mostrar o botão
+                    requests.put(url_status, json={
+                        "cantor": p.get('cantor'), 
+                        "musica": p.get('musica'), 
+                        "url_video": link, 
+                        "comando": "aguardando_play" 
+                    })
+                    st.rerun()
+        
+        st.markdown("---")
+        if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
+            requests.patch(url_status, json={"comando": "play"})
+            st.rerun()
+    else:
+        st.write("Fila vazia.")
+
+    # --- CAIXA DE PEDIDOS MANUAIS ---
+    st.markdown("---")
+    st.subheader("⚠️ Pedidos Manuais (Atenção)")
+    
+    pedidos_manuais = {k: v for k, v in pedidos_data.items() if str(v.get('musica', '')).startswith("PEDIDO:")}
+    
+    if pedidos_manuais:
+        st.markdown("""
+            <style>
+                .blink { animation: blinker 1s linear infinite; color: yellow; font-weight: bold; 
+                       background-color: rgba(255, 255, 0, 0.1); padding: 10px; border: 2px solid yellow; border-radius: 10px; }
+                @keyframes blinker { 50% { opacity: 0; } }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        for p_id, p in pedidos_manuais.items():
+            st.markdown(f'<div class="blink">📢 {p.get("cantor")}: {p.get("musica")}</div>', unsafe_allow_html=True)
+            if st.button(f"Remover aviso {p_id[:4]}", key=f"del_man_{p_id}"):
+                requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
+                st.rerun()
+    else:
+        st.success("Nenhum pedido manual pendente.")
+            
+    time.sleep(5)
+    st.rerun()
