@@ -67,9 +67,11 @@ else:
     qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
+    URL_PEDIDOS = f"{BASE_URL}/pedidos.json"
+    
     st.subheader("📋 Gestão de Fila")
     
-    pedidos_data = requests.get(f"{BASE_URL}/pedidos_{st.session_state.slug}.json").json() or {}
+    pedidos_data = requests.get(URL_PEDIDOS).json() or {}
     
     if pedidos_data:
         for p_id, p in pedidos_data.items():
@@ -77,17 +79,16 @@ else:
                 col1, col2, col3 = st.columns([4, 1, 1])
                 col1.write(f"🎤 {p.get('cantor')} - {p.get('musica')}")
                 if col2.button("🗑️", key=f"del_{p_id}"): 
-                    requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
+                    requests.delete(f"{BASE_URL}/pedidos/{p_id}.json"); st.rerun()
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
                     link = encontrar_link_real(normalizar_nome(p.get('musica')))
-                    # Ao clicar no botão, enviamos os dados para o status
-                    # O Cliente monitora 'comando': 'aguardando_play' para mostrar o botão
+                    # Envia os dados completos com o link real do Cloudinary para o status da TV
                     requests.put(url_status, json={
                         "cantor": p.get('cantor'), 
                         "musica": p.get('musica'), 
                         "url_video": link, 
-                        "comando": "aguardando_play" 
+                        "comando": "play" 
                     })
                     st.rerun()
         
@@ -116,10 +117,10 @@ else:
         for p_id, p in pedidos_manuais.items():
             st.markdown(f'<div class="blink">📢 {p.get("cantor")}: {p.get("musica")}</div>', unsafe_allow_html=True)
             if st.button(f"Remover aviso {p_id[:4]}", key=f"del_man_{p_id}"):
-                requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
+                requests.delete(f"{BASE_URL}/pedidos/{p_id}.json")
                 st.rerun()
     else:
         st.success("Nenhum pedido manual pendente.")
-            
+        
     time.sleep(5)
     st.rerun()
