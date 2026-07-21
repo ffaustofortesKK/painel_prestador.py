@@ -5,6 +5,7 @@ import unicodedata
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
+import cloudinary.search
 from io import BytesIO
 import requests
 import time
@@ -42,14 +43,28 @@ def encontrar_link_real(nome_base):
 
 def obter_lista_video_clipes():
     try:
-        result = cloudinary.api.resources(type="upload", resource_type="video", prefix="video_clipes", max_results=100)
+        # Utiliza a API de Search do Cloudinary para encontrar todos os vídeos na pasta video_clipes de forma robusta
+        search_result = cloudinary.search.ResourceType("video").execute()
         lista = []
-        for item in result.get('resources', []):
+        for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
-            nome_limpo = pid.split('/')[-1]
-            lista.append((nome_limpo, item.get('secure_url')))
+            # Filtra apenas os que estão dentro da pasta video_clipes
+            if "video_clipes" in pid:
+                nome_limpo = pid.split('/')[-1]
+                lista.append((nome_limpo, item.get('secure_url')))
+        
+        # Caso a pesquisa venha vazia por restrições de indexing, tenta o método standard com prefixo alargado
+        if not lista:
+            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
+            for item in result.get('resources', []):
+                pid = item.get('public_id', '')
+                if "video_clipes" in pid:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, item.get('secure_url')))
+                    
         return lista
-    except Exception:
+    except Exception as e:
+        print(f"Erro ao buscar clipes: {e}")
         return []
 
 if st.session_state.nome is None:
@@ -136,7 +151,6 @@ else:
             if st.button("📤 Enviar vídeo para a pasta 'video_clipes'"):
                 with st.spinner("A carregar vídeo para a nuvem..."):
                     try:
-                        # Faz upload direto para a pasta video_clipes no Cloudinary
                         cloudinary.uploader.upload(
                             arquivo_upload, 
                             resource_type="video", 
