@@ -20,7 +20,8 @@ if "slug" not in st.session_state: st.session_state.slug = None
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 
 def normalizar_nome(nome):
-    nome = nome.replace(".mp4", "").replace(".wmv", "").replace(".avi", "")
+    nome = str(nome)
+    nome = nome.replace(".mp4", "").replace(".wmv", "").replace(".avi", "").replace(".MP4", "").replace(".WMV", "").replace(".AVI", "")
     nome = re.sub(r'["\'()\[\]]', '', nome)
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
     nome = re.sub(r'[^\w\s]', '', nome)
@@ -54,7 +55,7 @@ def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     try:
-        # Restringe a listagem exclusivamente à pasta 'clipes'
+        # Restringe a listagem exclusivamente à pasta 'clipes' do Cloudinary
         search_result = cloudinary.search.Search().expression('resource_type:video AND folder=clipes').max_results(500).execute()
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
