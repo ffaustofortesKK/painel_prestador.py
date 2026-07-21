@@ -4,7 +4,6 @@ import re
 import unicodedata
 import cloudinary
 import cloudinary.api
-import cloudinary.search
 from io import BytesIO
 import requests
 import time
@@ -29,39 +28,22 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        # Procura primeiro dentro da pasta 'clipes'
-        search_result = cloudinary.search.Search().expression('resource_type:video AND folder=clipes').max_results(500).execute()
-        for res in search_result.get('resources', []):
+        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
+        for res in result.get('resources', []):
             public_id = res.get('public_id', '').lower()
             nome_arquivo = public_id.split('/')[-1]
             if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
                 return res.get('secure_url')
     except Exception as e:
-        print(f"Erro ao procurar link real na pasta clipes: {e}")
-        
-    # Fallback para busca global caso não encontre na pasta específica
-    try:
-        search_result = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
-        for res in search_result.get('resources', []):
-            public_id = res.get('public_id', '').lower()
-            nome_arquivo = public_id.split('/')[-1]
-            if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
-                return res.get('secure_url')
-    except Exception as e:
-        print(f"Erro no fallback geral: {e}")
+        print(f"Erro ao procurar link real: {e}")
     return None
 
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     try:
-        # Método direto via Admin API filtrando pela pasta 'clipes'
-        result = cloudinary.api.resources(
-            type="upload",
-            resource_type="video",
-            prefix="clipes/",
-            max_results=500
-        )
+        # Busca exaustiva de todos os vídeos na conta do Cloudinary para garantir que aparecem
+        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
         for item in result.get('resources', []):
             pid = item.get('public_id', '')
             url = item.get('secure_url')
@@ -70,21 +52,7 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        print(f"Erro ao buscar vídeos da pasta clipes via Admin API: {e}")
-        
-    # Fallback caso o prefixo exato venha diferente
-    if not lista:
-        try:
-            result_geral = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-            for item in result_geral.get('resources', []):
-                pid = item.get('public_id', '')
-                url = item.get('secure_url')
-                if 'clipes' in pid.lower() and url and url not in seen_urls:
-                    nome_limpo = pid.split('/')[-1]
-                    lista.append((nome_limpo, url))
-                    seen_urls.add(url)
-        except Exception as e:
-            print(f"Erro no fallback de listagem: {e}")
+        print(f"Erro ao buscar vídeos gerais: {e}")
             
     return lista
 
@@ -122,7 +90,7 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    st.subheader("🎬 Playlist de Vídeos Clipes (Pasta 'clipes')")
+    st.subheader("🎬 Playlist de Vídeos Clipes (Cloudinary)")
     
     with st.container():
         st.markdown("""
@@ -142,7 +110,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe na pasta 'clipes':", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -168,9 +136,9 @@ else:
                             time.sleep(1)
                             st.rerun()
             else:
-                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}' na pasta 'clipes'.")
+                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na pasta 'clipes'. Utilize a opção manual abaixo se necessário:")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta do Cloudinary. Utilize a opção manual abaixo:")
             
         st.markdown("---")
         st.markdown("⚡ **Seleção Manual (Nome do arquivo exato):**")
