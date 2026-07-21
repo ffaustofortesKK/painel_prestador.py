@@ -13,7 +13,6 @@ cloudinary.config(cloud_name="yhwgjh7g", api_key="347924379441394", api_secret="
 
 st.set_page_config(page_title="Painel do Prestador", layout="wide")
 
-# Inicialização segura do estado
 if "nome" not in st.session_state: st.session_state.nome = None
 if "slug" not in st.session_state: st.session_state.slug = None
 
@@ -28,21 +27,20 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        resources = cloudinary.api.resources(type="upload", resource_type="video", prefix=nome_base, max_results=5)
+        # Busca direta focando estritamente na pasta video_clipes
+        resources = cloudinary.api.resources(type="upload", resource_type="video", prefix=f"video_clipes/{nome_base}", max_results=5)
         if resources.get('resources'):
             return resources['resources'][0]['secure_url']
-            
-        termo_busca = nome_base.split('_')[0] if '_' in nome_base else nome_base
-        all_res = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
+        
+        # Fallback de busca ampla dentro da pasta video_clipes
+        all_res = cloudinary.api.resources(type="upload", resource_type="video", prefix="video_clipes", max_results=200)
         for res in all_res.get('resources', []):
-            public_id = res.get('public_id', '').lower()
-            if termo_busca.lower() in public_id:
-                return res['secure_url']
+            if nome_base.lower() in res.get('public_id', '').lower():
+                return res.get('secure_url')
     except Exception:
         pass
     return None
 
-# --- ESTRUTURA DA PÁGINA ---
 if st.session_state.nome is None:
     st.title("🎤 Portal do Prestador")
     with st.form("login_form"):
@@ -88,7 +86,6 @@ else:
                 if col2.button("🗑️", key=f"del_{p_id}"): 
                     requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
                 
-                # BOTÃO MICROFONE AUTOMÁTICO (Disparo Imediato)
                 if col3.button("🎤", key=f"start_{p_id}"):
                     link = encontrar_link_real(normalizar_nome(p.get('musica')))
                     requests.put(url_status, json={
@@ -107,7 +104,6 @@ else:
     else:
         st.write("Fila vazia.")
 
-    # --- CAIXA DE PEDIDOS MANUAIS ---
     st.markdown("---")
     st.subheader("⚠️ Pedidos Manuais (Atenção)")
     
@@ -129,7 +125,6 @@ else:
                 st.rerun()
     else:
         st.success("Nenhum pedido manual pendente.")
-            
-    # Atualização fluida a cada 2 segundos para menor latência
+          
     time.sleep(2)
     st.rerun()
