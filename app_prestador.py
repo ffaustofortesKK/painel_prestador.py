@@ -43,17 +43,14 @@ def encontrar_link_real(nome_base):
 
 def obter_lista_video_clipes():
     try:
-        # Utiliza a API de Search do Cloudinary para encontrar todos os vídeos na pasta video_clipes de forma robusta
         search_result = cloudinary.search.ResourceType("video").execute()
         lista = []
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
-            # Filtra apenas os que estão dentro da pasta video_clipes
             if "video_clipes" in pid:
                 nome_limpo = pid.split('/')[-1]
                 lista.append((nome_limpo, item.get('secure_url')))
         
-        # Caso a pesquisa venha vazia por restrições de indexing, tenta o método standard com prefixo alargado
         if not lista:
             result = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
             for item in result.get('resources', []):
@@ -104,7 +101,6 @@ else:
     # Seção dedicada à Playlist de Vídeos Clipes com o retângulo visual pedido
     st.subheader("🎬 Playlist de Vídeos Clipes (Fundo da TV)")
     
-    # Caixa / Retângulo delimitador para a seleção e gestão dos clipes
     with st.container():
         st.markdown("""
             <style>
@@ -123,23 +119,35 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            nomes_clipes = [c[0] for c in clipes_disponiveis]
-            col_p1, col_p2 = st.columns([3, 1])
-            with col_p1:
-                clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
-            with col_p2:
-                if st.button("🚀 Enviar Clipe para Tela"):
-                    url_selecionada = next((c[1] for c in clipes_disponiveis if c[0] == clipe_escolhido), None)
-                    if url_selecionada:
-                        requests.patch(url_status, json={
-                            "cantor": "VÍDEO CLIPE",
-                            "musica": clipe_escolhido,
-                            "url_video": url_selecionada,
-                            "comando": "play"
-                        })
-                        st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso!")
-                        time.sleep(1)
-                        st.rerun()
+            # 🔍 BARRA DE PESQUISA PARA OS VÍDEOS CLIPES
+            termo_pesquisa = st.text_input("🔍 Pesquisar vídeo clipe pelo nome:", "", placeholder="Digite o nome do artista ou música...")
+            
+            # Filtra os clipes com base no texto inserido
+            if termo_pesquisa:
+                clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa.lower() in c[0].lower()]
+            else:
+                clipes_filtrados = clipes_disponiveis
+                
+            if clipes_filtrados:
+                nomes_clipes = [c[0] for c in clipes_filtrados]
+                col_p1, col_p2 = st.columns([3, 1])
+                with col_p1:
+                    clipe_escolhido = st.selectbox("Selecione o vídeo clipe encontrado:", nomes_clipes, label_visibility="collapsed")
+                with col_p2:
+                    if st.button("🚀 Enviar Clipe para Tela"):
+                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
+                        if url_selecionada:
+                            requests.patch(url_status, json={
+                                "cantor": "VÍDEO CLIPE",
+                                "musica": clipe_escolhido,
+                                "url_video": url_selecionada,
+                                "comando": "play"
+                            })
+                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso!")
+                            time.sleep(1)
+                            st.rerun()
+            else:
+                st.warning("Nenhum vídeo clipe corresponde à tua pesquisa.")
         else:
             st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
             
