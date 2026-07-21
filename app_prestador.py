@@ -20,57 +20,41 @@ if "slug" not in st.session_state: st.session_state.slug = None
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 
 def normalizar_nome(nome):
-    nome = str(nome).lower()
-    for ext in [".mp4", ".wmv", ".avi", ".MP4", ".WMV", ".AVI"]:
-        nome = nome.replace(ext, "")
-    nome = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', nome)
+    nome = nome.replace(".mp4", "").replace(".wmv", "").replace(".avi", "")
+    nome = re.sub(r'["\'()\[\]]', '', nome)
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    nome = re.sub(r'[^\w\s]', ' ', nome)
-    return " ".join(nome.split())
+    nome = re.sub(r'[^\w\s]', '', nome)
+    return "_".join(nome.split())
 
 def encontrar_link_real(nome_base):
-    nome_base_limpo = normalizar_nome(nome_base)
-    # Extrai palavras significativas (com mais de 2 letras) para busca flexível
-    palavras_chave = [p for p in nome_base_limpo.split() if len(p) > 2]
-    
     try:
-        # Busca global irrestrita em toda a conta (raiz e subpastas como 'clipes' e 'MÚSICAS DE KARAOKE')
+        # Procura primeiro dentro da pasta 'clipes'
+        search_result = cloudinary.search.Search().expression('resource_type:video AND folder=clipes').max_results(500).execute()
+        for res in search_result.get('resources', []):
+            public_id = res.get('public_id', '').lower()
+            nome_arquivo = public_id.split('/')[-1]
+            if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
+                return res.get('secure_url')
+    except Exception as e:
+        print(f"Erro ao procurar link real na pasta clipes: {e}")
+        
+    # Fallback para busca global caso não encontre na pasta específica
+    try:
         search_result = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
         for res in search_result.get('resources', []):
-            public_id = res.get('public_id', '')
+            public_id = res.get('public_id', '').lower()
             nome_arquivo = public_id.split('/')[-1]
-            nome_arquivo_limpo = normalizar_nome(nome_arquivo)
-            
-            # 1. Correspondência direta por inclusão
-            if nome_base_limpo in nome_arquivo_limpo or nome_arquivo_limpo in nome_base_limpo:
-                return res.get('secure_url')
-                
-            # 2. Correspondência por cruzamento de palavras-chave essenciais
-            if palavras_chave and sum(1 for palavra in palavras_chave if palavra in nome_arquivo_limpo) >= max(1, len(palavras_chave) // 2):
+            if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
                 return res.get('secure_url')
     except Exception as e:
-        print(f"Erro na busca global Search API: {e}")
-        
-    # Fallback exaustivo por api.resources caso o Search precise de empurrão
-    try:
-        all_res = cloudinary.api.resources(type="upload", resource_type="video", max_results=500, prefix="")
-        for res in all_res.get('resources', []):
-            public_id = res.get('public_id', '')
-            nome_arquivo = public_id.split('/')[-1]
-            nome_arquivo_limpo = normalizar_nome(nome_arquivo)
-            if nome_base_limpo in nome_arquivo_limpo or nome_arquivo_limpo in nome_base_limpo:
-                return res.get('secure_url')
-            if palavras_chave and sum(1 for palavra in palavras_chave if palavra in nome_arquivo_limpo) >= max(1, len(palavras_chave) // 2):
-                return res.get('secure_url')
-    except Exception as e:
-        print(f"Erro no fallback exaustivo: {e}")
-        
+        print(f"Erro no fallback geral: {e}")
     return None
 
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     try:
+        # Restringe a listagem exclusivamente à pasta 'clipes'
         search_result = cloudinary.search.Search().expression('resource_type:video AND folder=clipes').max_results(500).execute()
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
@@ -176,7 +160,7 @@ else:
         with col_m2:
             if st.button("🚀 Enviar Manual"):
                 if nome_manual:
-                    link_encontrado = encontrar_link_real(nome_manual)
+                    link_encontrado = encontrar_link_real(normalizar_nome(nome_manual))
                     if link_encontrado:
                         requests.patch(url_status, json={
                             "cantor": "VÍDEO CLIPE",
@@ -207,7 +191,7 @@ else:
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
                     nome_musica = p.get('musica')
-                    link = encontrar_link_real(nome_musica)
+                    link = encontrar_link_real(normalizar_nome(nome_musica))
                     
                     if link:
                         requests.put(url_status, json={
