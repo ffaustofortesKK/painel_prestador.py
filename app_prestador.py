@@ -4,6 +4,7 @@ import re
 import unicodedata
 import cloudinary
 import cloudinary.api
+import cloudinary.uploader
 from io import BytesIO
 import requests
 import time
@@ -41,22 +42,12 @@ def encontrar_link_real(nome_base):
 
 def obter_lista_video_clipes():
     try:
-        # Tenta buscar com prefixo 'video_clipes/'
         result = cloudinary.api.resources(type="upload", resource_type="video", prefix="video_clipes", max_results=100)
         lista = []
         for item in result.get('resources', []):
             pid = item.get('public_id', '')
             nome_limpo = pid.split('/')[-1]
             lista.append((nome_limpo, item.get('secure_url')))
-        
-        # Se vier vazio, tenta busca geral sem prefixo estrito
-        if not lista:
-            result_geral = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
-            for item in result_geral.get('resources', []):
-                pid = item.get('public_id', '')
-                if "video_clipe" in pid.lower() or "clipe" in pid.lower():
-                    nome_limpo = pid.split('/')[-1]
-                    lista.append((nome_limpo, item.get('secure_url')))
         return lista
     except Exception:
         return []
@@ -95,47 +86,70 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    # Seção dedicada à Playlist de Vídeos Clipes dentro de um retângulo estilizado
+    # Seção dedicada à Playlist de Vídeos Clipes com o retângulo visual pedido
     st.subheader("🎬 Playlist de Vídeos Clipes (Fundo da TV)")
     
-    clipes_disponiveis = obter_lista_video_clipes()
-    
-    if clipes_disponiveis:
-        nomes_clipes = [c[0] for c in clipes_disponiveis]
-        
-        # Estilo de retângulo para envolver a seleção de vídeos
+    # Caixa / Retângulo delimitador para a seleção e gestão dos clipes
+    with st.container():
         st.markdown("""
             <style>
-                .retangulo-clipes {
+                .retangulo-playlist {
                     border: 2px solid #ffd700;
                     padding: 20px;
                     border-radius: 10px;
-                    background-color: rgba(255, 215, 0, 0.03);
+                    background-color: rgba(255, 215, 0, 0.02);
                     margin-bottom: 20px;
                 }
             </style>
         """, unsafe_allow_html=True)
         
-        st.markdown('<div class="retangulo-clipes">', unsafe_allow_html=True)
-        col_p1, col_p2 = st.columns([3, 1])
-        with col_p1:
-            clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
-        with col_p2:
-            if st.button("🚀 Enviar Clipe"):
-                url_selecionada = next((c[1] for c in clipes_disponiveis if c[0] == clipe_escolhido), None)
-                if url_selecionada:
-                    requests.patch(url_status, json={
-                        "cantor": "VÍDEO CLIPE",
-                        "musica": clipe_escolhido,
-                        "url_video": url_selecionada,
-                        "comando": "play"
-                    })
-                    st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso!")
-                    time.sleep(1)
-                    st.rerun()
+        st.markdown('<div class="retangulo-playlist">', unsafe_allow_html=True)
+        
+        clipes_disponiveis = obter_lista_video_clipes()
+        
+        if clipes_disponiveis:
+            nomes_clipes = [c[0] for c in clipes_disponiveis]
+            col_p1, col_p2 = st.columns([3, 1])
+            with col_p1:
+                clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
+            with col_p2:
+                if st.button("🚀 Enviar Clipe para Tela"):
+                    url_selecionada = next((c[1] for c in clipes_disponiveis if c[0] == clipe_escolhido), None)
+                    if url_selecionada:
+                        requests.patch(url_status, json={
+                            "cantor": "VÍDEO CLIPE",
+                            "musica": clipe_escolhido,
+                            "url_video": url_selecionada,
+                            "comando": "play"
+                        })
+                        st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+        else:
+            st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
+            
+        st.markdown("---")
+        st.write("📂 **Adicionar novo vídeo do seu PC (Arraste ou clique abaixo):**")
+        arquivo_upload = st.file_uploader("Carregar vídeo MP4", type=["mp4", "mov", "avi"], label_visibility="collapsed")
+        
+        if arquivo_upload is not None:
+            if st.button("📤 Enviar vídeo para a pasta 'video_clipes'"):
+                with st.spinner("A carregar vídeo para a nuvem..."):
+                    try:
+                        # Faz upload direto para a pasta video_clipes no Cloudinary
+                        cloudinary.uploader.upload(
+                            arquivo_upload, 
+                            resource_type="video", 
+                            folder="video_clipes",
+                            public_id=arquivo_upload.name.split('.')[0]
+                        )
+                        st.success("Vídeo enviado com sucesso para o Cloudinary!")
+                        time.sleep(1)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao carregar o vídeo: {e}")
+                        
         st.markdown('</div>', unsafe_allow_html=True)
-    else:
-        st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
 
     st.markdown("---")
     st.subheader("📋 Gestão de Fila")
