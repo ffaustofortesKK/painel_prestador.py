@@ -42,9 +42,13 @@ def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     
-    # Tentativas automáticas no Cloudinary
+    # 1. Tenta buscar via Cloudinary Search API na pasta 'clipes'
     try:
-        search_result = cloudinary.search.Search().expression('resource_type:video').max_results(100).execute()
+        search_result = cloudinary.search.Search()\
+            .expression('folder=clipes AND resource_type:video')\
+            .max_results(100)\
+            .execute()
+        
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
             url = item.get('secure_url')
@@ -53,11 +57,12 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        print(f"Erro na busca: {e}")
+        print(f"Aviso na Search API (clipes): {e}")
 
+    # 2. Se a pasta 'clipes' vier vazia, tenta prefixo 'clipes/'
     if not lista:
         try:
-            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
+            result = cloudinary.api.resources(type="upload", resource_type="video", prefix="clipes", max_results=100)
             for item in result.get('resources', []):
                 pid = item.get('public_id', '')
                 url = item.get('secure_url')
@@ -66,8 +71,22 @@ def obter_lista_video_clipes():
                     lista.append((nome_limpo, url))
                     seen_urls.add(url)
         except Exception as e:
-            print(f"Erro na API resources: {e}")
+            print(f"Aviso no prefixo clipes/: {e}")
 
+    # 3. Tenta buscar todos os vídeos da conta geral
+    if not lista:
+        try:
+            result_geral = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
+            for item in result_geral.get('resources', []):
+                pid = item.get('public_id', '')
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, url))
+                    seen_urls.add(url)
+        except Exception as e:
+            print(f"Erro ao buscar lista geral de vídeos: {e}")
+            
     return lista
 
 if st.session_state.nome is None:
@@ -124,24 +143,24 @@ else:
         
         clipes_disponiveis = obter_lista_video_clipes()
         
-        # Fallback de segurança caso a API venha totalmente vazia por restrição da conta
+        # GARANTIA DE EXIBIÇÃO: Se a API falhar ou vier vazia, criamos uma lista base para o seletor nunca sumir da tela
         if not clipes_disponiveis:
-            st.info("💡 Modo de inserção manual ativo (API do Cloudinary não retornou itens automaticamente). Insira o link direto do vídeo do Cloudinary abaixo:")
-            link_manual = st.text_input("URL Direta do Vídeo (.mp4):", "")
-            nome_manual = st.text_input("Nome do Clipe:", "Vídeo de Fundo")
-            if st.button("🚀 Enviar Vídeo Manual para a TV"):
-                if link_manual:
+            st.warning("⚠️ Cloudinary não retornou vídeos automaticamente. Insira o link direto do clipe abaixo ou use o campo de texto:")
+            clipe_manual_nome = st.text_input("Nome do Clipe:", "Vídeo Exemplo")
+            clipe_manual_url = st.text_input("URL Direta do Vídeo (.mp4):", "")
+            if st.button("🚀 Enviar Clipe Manual para Tela"):
+                if clipe_manual_url:
                     requests.patch(url_status, json={
                         "cantor": "VÍDEO CLIPE",
-                        "musica": nome_manual,
-                        "url_video": link_manual,
+                        "musica": clipe_manual_nome,
+                        "url_video": clipe_manual_url,
                         "comando": "play"
                     })
-                    st.success("Vídeo enviado com sucesso para a TV!")
+                    st.success(f"Clipe '{clipe_manual_nome}' enviado com sucesso!")
                     time.sleep(1)
                     st.rerun()
                 else:
-                    st.error("Insira um link válido.")
+                    st.error("Insira uma URL válida.")
         else:
             termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
             
