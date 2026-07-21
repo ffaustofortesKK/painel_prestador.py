@@ -88,7 +88,7 @@ else:
                 if col2.button("🗑️", key=f"del_{p_id}"): 
                     requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
                 
-                # BOTÃO MICROFONE AUTOMÁTICO (Interrompe vídeo atual, chama contagem e abre palco)
+                # BOTÃO MICROFONE AUTOMÁTICO (Disparo Imediato)
                 if col3.button("🎤", key=f"start_{p_id}"):
                     link = encontrar_link_real(normalizar_nome(p.get('musica')))
                     requests.put(url_status, json={
@@ -130,5 +130,6 @@ else:
     else:
         st.success("Nenhum pedido manual pendente.")
             
-    time.sleep(5)
+    # Atualização fluida a cada 2 segundos para menor latência
+    time.sleep(2)
     st.rerun()
