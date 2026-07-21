@@ -42,10 +42,14 @@ def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     
-    # 1. Tenta buscar pelo prefixo 'clipes/' ou 'video_clipe/'
-    for prefixo in ["clipes/", "video_clipe/", "videoclipes/"]:
+    # Tenta múltiplos prefixos e também a raiz global
+    prefixos = ["clipes/", "video_clipe/", "videoclipes/", ""]
+    for prefixo in prefixos:
         try:
-            result = cloudinary.api.resources(type="upload", resource_type="video", prefix=prefixo, max_results=500)
+            kwargs = {"type": "upload", "resource_type": "video", "max_results": 500}
+            if prefixo:
+                kwargs["prefix"] = prefixo
+            result = cloudinary.api.resources(**kwargs)
             for item in result.get('resources', []):
                 pid = item.get('public_id', '')
                 url = item.get('secure_url')
@@ -54,23 +58,7 @@ def obter_lista_video_clipes():
                     lista.append((nome_limpo, url))
                     seen_urls.add(url)
         except Exception as e:
-            print(f"Erro ao obter com prefixo {prefixo}: {e}")
-        if lista:
-            break
-
-    # 2. Se a listagem por prefixo específico vier vazia, puxa todos os vídeos da conta para nunca falhar a listagem
-    if not lista:
-        try:
-            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-            for item in result.get('resources', []):
-                pid = item.get('public_id', '')
-                url = item.get('secure_url')
-                if url and url not in seen_urls:
-                    nome_limpo = pid.split('/')[-1]
-                    lista.append((nome_limpo, url))
-                    seen_urls.add(url)
-        except Exception as e:
-            print(f"Erro ao listar vídeos gerais: {e}")
+            print(f"Erro ao obter com prefixo '{prefixo}': {e}")
             
     return lista
 
@@ -154,10 +142,33 @@ else:
                             time.sleep(1)
                             st.rerun()
             else:
-                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
-        else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Verifique se existem vídeos carregados.")
-            
+                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'. Tente pesquisar por outro nome.")
+        
+        # Bloco de segurança garantindo opção mesmo se a API falhar em listar automaticamente
+        st.markdown("---")
+        st.markdown("⚡ **Seleção Manual por Nome de Vídeo (Alternativa):**")
+        col_m1, col_m2 = st.columns([3, 1])
+        with col_m1:
+            nome_manual = st.text_input("Nome exato do ficheiro no Cloudinary (ex: video1.mp4):", key="input_manual_clipe")
+        with col_m2:
+            if st.button("🚀 Enviar Manual"):
+                if nome_manual:
+                    link_encontrado = encontrar_link_real(normalizar_nome(nome_manual))
+                    if link_encontrado:
+                        requests.patch(url_status, json={
+                            "cantor": "VÍDEO CLIPE",
+                            "musica": nome_manual,
+                            "url_video": link_encontrado,
+                            "comando": "clipe"
+                        })
+                        st.success(f"Clipe '{nome_manual}' enviado com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Vídeo não encontrado no Cloudinary com esse nome.")
+                else:
+                    st.warning("Insira um nome válido.")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
