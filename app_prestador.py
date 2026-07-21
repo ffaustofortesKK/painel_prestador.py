@@ -28,12 +28,10 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        # Tenta a busca por prefixo exato primeiro
         resources = cloudinary.api.resources(type="upload", resource_type="video", prefix=nome_base, max_results=5)
         if resources.get('resources'):
             return resources['resources'][0]['secure_url']
             
-        # Se falhar, faz uma varredura inteligente por parte do nome (ex: primeira palavra chave)
         termo_busca = nome_base.split('_')[0] if '_' in nome_base else nome_base
         all_res = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
         for res in all_res.get('resources', []):
@@ -78,35 +76,53 @@ else:
     qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
-    st.subheader("📋 Gestão de Fila")
-    
+    st.subheader("📋 Gestão de Fila e Controlo TV")
+
+    # Controlo Global da TV (Parar Karaoke / Voltar aos Clips)
+    col_ctrl1, col_ctrl2 = st.columns(2)
+    with col_ctrl1:
+        if st.button("⏹️ FECHAR KARAOKE / VOLTAR AOS CLIPS", use_container_width=True):
+            requests.put(url_status, json={"comando": "", "url_video": "", "musica": "", "cantor": ""})
+            st.rerun()
+    with col_ctrl2:
+        if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)", use_container_width=True):
+            requests.patch(url_status, json={"comando": "play"})
+            st.rerun()
+
+    st.markdown("---")
     pedidos_data = requests.get(f"{BASE_URL}/pedidos_{st.session_state.slug}.json").json() or {}
     
     if pedidos_data:
         for p_id, p in pedidos_data.items():
             if not str(p.get('musica', '')).startswith("PEDIDO:"):
-                col1, col2, col3 = st.columns([4, 1, 1])
+                col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
                 col1.write(f"🎤 {p.get('cantor')} - {p.get('musica')}")
                 if col2.button("🗑️", key=f"del_{p_id}"): 
                     requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json"); st.rerun()
                 
-                if col3.button("🎤", key=f"start_{p_id}"):
+                # Botão Contagem (aguardando_play)
+                if col3.button("⏳", key=f"wait_{p_id}", help="Chamar com contagem decrescente"):
                     link = encontrar_link_real(normalizar_nome(p.get('musica')))
-                    # Usa PUT para reescrever completamente o status atual, forçando a TV a interromper qualquer vídeo anterior e assumir o novo comando
                     requests.put(url_status, json={
                         "cantor": p.get('cantor'), 
                         "musica": p.get('musica'), 
                         "url_video": link, 
                         "comando": "aguardando_play" 
                     })
-                    # Opcional: remove da fila automaticamente ao ser chamado para cantar
                     requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
                     st.rerun()
-        
-        st.markdown("---")
-        if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
-            requests.patch(url_status, json={"comando": "play"})
-            st.rerun()
+
+                # Botão Microfone Direto (Começar música do cliente/prestador de imediato)
+                if col4.button("🎤", key=f"start_direto_{p_id}", help="Começar música imediatamente (fechando o anterior)"):
+                    link = encontrar_link_real(normalizar_nome(p.get('musica')))
+                    requests.put(url_status, json={
+                        "cantor": p.get('cantor'), 
+                        "musica": p.get('musica'), 
+                        "url_video": link, 
+                        "comando": "play" 
+                    })
+                    requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
+                    st.rerun()
     else:
         st.write("Fila vazia.")
 
