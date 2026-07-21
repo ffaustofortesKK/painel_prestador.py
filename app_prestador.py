@@ -119,12 +119,12 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            # 🔍 BARRA DE PESQUISA PARA OS VÍDEOS CLIPES
-            termo_pesquisa = st.text_input("🔍 Pesquisar vídeo clipe pelo nome:", "", placeholder="Digite o nome do artista ou música...")
+            # 🔍 Barra de Pesquisa de Vídeos Clipes
+            termo_pesquisa = st.text_input("🔍 Pesquisar vídeo na pasta Cloudinary:", "").strip().lower()
             
-            # Filtra os clipes com base no texto inserido
+            # Filtra os clipes com base no que foi digitado
             if termo_pesquisa:
-                clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa.lower() in c[0].lower()]
+                clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
             else:
                 clipes_filtrados = clipes_disponiveis
                 
@@ -147,7 +147,7 @@ else:
                             time.sleep(1)
                             st.rerun()
             else:
-                st.warning("Nenhum vídeo clipe corresponde à tua pesquisa.")
+                st.warning(f"Nenhum vídeo encontrado com o termo '{termo_pesquisa}'.")
         else:
             st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
             
