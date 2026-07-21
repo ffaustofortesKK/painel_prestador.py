@@ -27,12 +27,10 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        # Busca direta focando estritamente na pasta video_clipes
         resources = cloudinary.api.resources(type="upload", resource_type="video", prefix=f"video_clipes/{nome_base}", max_results=5)
         if resources.get('resources'):
             return resources['resources'][0]['secure_url']
         
-        # Fallback de busca ampla dentro da pasta video_clipes
         all_res = cloudinary.api.resources(type="upload", resource_type="video", prefix="video_clipes", max_results=200)
         for res in all_res.get('resources', []):
             if nome_base.lower() in res.get('public_id', '').lower():
@@ -87,29 +85,42 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    # Seção dedicada à Playlist de Vídeos Clipes no painel
+    # Seção de Playlist de Vídeos Clipes organizada dentro do retângulo estético solicitado
     st.subheader("🎬 Playlist de Vídeos Clipes (Fundo da TV)")
     clipes_disponiveis = obter_lista_video_clipes()
     
     if clipes_disponiveis:
         nomes_clipes = [c[0] for c in clipes_disponiveis]
         
-        col_p1, col_p2 = st.columns([3, 1])
-        with col_p1:
-            clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
-        with col_p2:
-            if st.button("🚀 Enviar Clipe para Tela"):
-                url_selecionada = next((c[1] for c in clipes_disponiveis if c[0] == clipe_escolhido), None)
-                if url_selecionada:
-                    requests.patch(url_status, json={
-                        "cantor": "VÍDEO CLIPE",
-                        "musica": clipe_escolhido,
-                        "url_video": url_selecionada,
-                        "comando": "play"
-                    })
-                    st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
-                    time.sleep(1)
-                    st.rerun()
+        # Estilização em container / retângulo para o seletor e botão
+        with st.container():
+            st.markdown("""
+                <style>
+                    div[data-testid="stVerticalBlock"] div:has(> div.element-container select) {
+                        border: 2px solid #ffd700;
+                        padding: 15px;
+                        border-radius: 8px;
+                        background-color: rgba(255, 215, 0, 0.02);
+                    }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            col_p1, col_p2 = st.columns([3, 1])
+            with col_p1:
+                clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
+            with col_p2:
+                if st.button("🚀 Enviar Clipe para Tela"):
+                    url_selecionada = next((c[1] for c in clipes_disponiveis if c[0] == clipe_escolhido), None)
+                    if url_selecionada:
+                        requests.patch(url_status, json={
+                            "cantor": "VÍDEO CLIPE",
+                            "musica": clipe_escolhido,
+                            "url_video": url_selecionada,
+                            "comando": "play"
+                        })
+                        st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                        time.sleep(1)
+                        st.rerun()
     else:
         st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
 
