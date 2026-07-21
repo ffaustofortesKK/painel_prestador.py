@@ -4,7 +4,6 @@ import re
 import unicodedata
 import cloudinary
 import cloudinary.api
-import cloudinary.uploader
 import cloudinary.search
 from io import BytesIO
 import requests
@@ -43,25 +42,24 @@ def encontrar_link_real(nome_base):
 
 def obter_lista_video_clipes():
     try:
-        search_result = cloudinary.search.ResourceType("video").execute()
+        search_result = cloudinary.search.Search()\
+            .expression('folder=video_clipes AND resource_type:video')\
+            .max_results(100)\
+            .execute()
         lista = []
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
-            if "video_clipes" in pid:
-                nome_limpo = pid.split('/')[-1]
-                lista.append((nome_limpo, item.get('secure_url')))
+            nome_limpo = pid.split('/')[-1]
+            lista.append((nome_limpo, item.get('secure_url')))
         
         if not lista:
-            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=100)
+            result = cloudinary.api.resources(type="upload", resource_type="video", prefix="video_clipes", max_results=100)
             for item in result.get('resources', []):
                 pid = item.get('public_id', '')
-                if "video_clipes" in pid:
-                    nome_limpo = pid.split('/')[-1]
-                    lista.append((nome_limpo, item.get('secure_url')))
-                    
+                nome_limpo = pid.split('/')[-1]
+                lista.append((nome_limpo, item.get('secure_url')))
         return lista
-    except Exception as e:
-        print(f"Erro ao buscar clipes: {e}")
+    except Exception:
         return []
 
 if st.session_state.nome is None:
@@ -98,7 +96,7 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    # Seção dedicada à Playlist de Vídeos Clipes com o retângulo visual pedido
+    # Seção dedicada à Playlist de Vídeos Clipes com Pesquisa na Nuvem
     st.subheader("🎬 Playlist de Vídeos Clipes (Fundo da TV)")
     
     with st.container():
@@ -119,10 +117,9 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            # 🔍 Barra de Pesquisa de Vídeos Clipes
-            termo_pesquisa = st.text_input("🔍 Pesquisar vídeo na pasta Cloudinary:", "").strip().lower()
+            # 🔍 Barra de Pesquisa de Vídeos Clipes na Nuvem
+            termo_pesquisa = st.text_input("🔍 Pesquisar música/vídeo na nuvem (Cloudinary):", "").strip().lower()
             
-            # Filtra os clipes com base no que foi digitado
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
             else:
@@ -132,7 +129,7 @@ else:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
                 col_p1, col_p2 = st.columns([3, 1])
                 with col_p1:
-                    clipe_escolhido = st.selectbox("Selecione o vídeo clipe encontrado:", nomes_clipes, label_visibility="collapsed")
+                    clipe_escolhido = st.selectbox("Selecione um vídeo clipe para enviar à tela:", nomes_clipes, label_visibility="collapsed")
                 with col_p2:
                     if st.button("🚀 Enviar Clipe para Tela"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
@@ -143,34 +140,14 @@ else:
                                 "url_video": url_selecionada,
                                 "comando": "play"
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso!")
+                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
                             time.sleep(1)
                             st.rerun()
             else:
-                st.warning(f"Nenhum vídeo encontrado com o termo '{termo_pesquisa}'.")
+                st.warning(f"Nenhum vídeo clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
             st.warning("Nenhum vídeo clipe encontrado na pasta 'video_clipes' do Cloudinary.")
             
-        st.markdown("---")
-        st.write("📂 **Adicionar novo vídeo do seu PC (Arraste ou clique abaixo):**")
-        arquivo_upload = st.file_uploader("Carregar vídeo MP4", type=["mp4", "mov", "avi"], label_visibility="collapsed")
-        
-        if arquivo_upload is not None:
-            if st.button("📤 Enviar vídeo para a pasta 'video_clipes'"):
-                with st.spinner("A carregar vídeo para a nuvem..."):
-                    try:
-                        cloudinary.uploader.upload(
-                            arquivo_upload, 
-                            resource_type="video", 
-                            folder="video_clipes",
-                            public_id=arquivo_upload.name.split('.')[0]
-                        )
-                        st.success("Vídeo enviado com sucesso para o Cloudinary!")
-                        time.sleep(1)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao carregar o vídeo: {e}")
-                        
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
