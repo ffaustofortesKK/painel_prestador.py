@@ -4,6 +4,7 @@ import re
 import unicodedata
 import cloudinary
 import cloudinary.api
+import cloudinary.search
 from io import BytesIO
 import requests
 import time
@@ -40,18 +41,39 @@ def encontrar_link_real(nome_base):
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
+    
+    # 1. Tenta buscar estritamente os ficheiros da pasta 'clipes' usando o prefixo exato
     try:
-        # Lista diretamente os vídeos com o prefixo exato da pasta 'clipes/'
-        result = cloudinary.api.resources(type="upload", resource_type="video", prefix="clipes/", max_results=100)
+        result = cloudinary.api.resources(type="upload", resource_type="video", prefix="clipes/", max_results=500)
         for item in result.get('resources', []):
             pid = item.get('public_id', '')
-            url = item.get('secure_url')
-            if url and url not in seen_urls:
-                nome_limpo = pid.split('/')[-1]
-                lista.append((nome_limpo, url))
-                seen_urls.add(url)
+            # Garante que o ficheiro está diretamente na pasta 'clipes' (ex: clipes/nome_do_video)
+            if pid.startswith("clipes/") and pid.count('/') == 1:
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, url))
+                    seen_urls.add(url)
     except Exception as e:
-        print(f"Erro ao obter lista de vídeos da pasta clipes: {e}")
+        print(f"Erro ao obter com prefixo clipes/: {e}")
+
+    # 2. Se a listagem por prefixo falhar, tenta via Cloudinary Search API filtrando por folder=clipes
+    if not lista:
+        try:
+            search_result = cloudinary.search.Search()\
+                .expression('folder=clipes AND resource_type:video')\
+                .max_results(500)\
+                .execute()
+            for item in search_result.get('resources', []):
+                pid = item.get('public_id', '')
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, url))
+                    seen_urls.add(url)
+        except Exception as e:
+            print(f"Erro na Search API: {e}")
+            
     return lista
 
 if st.session_state.nome is None:
@@ -136,7 +158,7 @@ else:
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}' na pasta 'clipes'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado dentro da pasta 'clipes' no Cloudinary. Confirme se os ficheiros estão carregados nessa pasta específica.")
+            st.warning("⚠️ Nenhum vídeo encontrado dentro da pasta 'clipes' no Cloudinary. Confirme se os ficheiros de vídeo estão guardados diretamente nessa pasta.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
