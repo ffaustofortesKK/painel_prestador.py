@@ -28,8 +28,8 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-        for res in result.get('resources', []):
+        search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
+        for res in search_result.get('resources', []):
             public_id = res.get('public_id', '').lower()
             nome_arquivo = public_id.split('/')[-1]
             if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
@@ -43,7 +43,6 @@ def obter_lista_video_clipes():
     seen_urls = set()
     
     try:
-        # Usa o motor de busca avançado do Cloudinary para encontrar todos os vídeos da conta
         search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
         for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
@@ -54,7 +53,6 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        # Método alternativo caso o search falhe
         try:
             result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
             for item in result.get('resources', []):
@@ -103,7 +101,7 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    st.subheader("🎬 Playlist de Vídeos Clipes (Pasta 'clipes')")
+    st.subheader("🎬 Playlist de Vídeos Clipes")
     
     with st.container():
         st.markdown("""
@@ -123,7 +121,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe na pasta:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -151,7 +149,7 @@ else:
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado dentro da pasta 'clipes' no Cloudinary.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
