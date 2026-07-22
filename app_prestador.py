@@ -143,7 +143,7 @@ else:
                                 "url_video": url_selecionada,
                                 "comando": "clipe"
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                            st.success(f"Clipe enviado com sucesso para a TV!")
                             time.sleep(1)
                             st.rerun()
             else:
@@ -171,7 +171,7 @@ else:
                     link = encontrar_link_real(normalizar_nome(nome_musica))
                     
                     if link:
-                        requests.put(url_status, json={
+                        requests.patch(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
