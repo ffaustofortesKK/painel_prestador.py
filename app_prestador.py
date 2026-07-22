@@ -22,61 +22,15 @@ BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 def normalizar_nome(nome):
     if not nome:
         return ""
-    nome = nome.replace(".mp4", "").replace(".MP4", "")
+    nome = nome.replace(".mp4", "").replace(".MP4", "").replace(".mkv", "").replace(".avi", "")
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
     nome = re.sub(r'["\'()\[\]{}]', '', nome)
     nome = re.sub(r'[^\w\s]', ' ', nome)
     return " ".join(nome.lower().split())
 
-def encontrar_link_real(nome_musica):
-    if not nome_musica:
-        return None
-        
-    termos_busca = normalizar_nome(nome_musica).split()
-    if not termos_busca:
-        return None
-
-    try:
-        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-        recursos = result.get('resources', [])
-
-        melhor_match = None
-        maior_pontuacao = 0
-
-        for item in recursos:
-            public_id = item.get('public_id', '')
-            nome_arquivo = public_id.split('/')[-1]
-            pub_normalizado = normalizar_nome(nome_arquivo)
-            
-            pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
-            
-            if pontos > maior_pontuacao:
-                maior_pontuacao = pontos
-                melhor_match = item.get('secure_url')
-
-        if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
-            return melhor_match
-
-        search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
-        for res in search_result.get('resources', []):
-            public_id = res.get('public_id', '')
-            nome_arquivo = public_id.split('/')[-1]
-            pub_normalizado = normalizar_nome(nome_arquivo)
-            
-            if all(termo in pub_normalizado for termo in termos_busca):
-                secure_url = res.get('secure_url')
-                if secure_url:
-                    return secure_url
-
-    except Exception as e:
-        print(f"Erro ao procurar link real no Cloudinary: {e}")
-        
-    return None
-
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
-    
     try:
         next_cursor = None
         while True:
@@ -100,6 +54,42 @@ def obter_lista_video_clipes():
         print(f"Erro ao obter vídeos via resources: {e}")
             
     return lista
+
+def encontrar_link_real(nome_musica):
+    if not nome_musica:
+        return None
+        
+    termos_busca = normalizar_nome(nome_musica).split()
+    if not termos_busca:
+        return None
+
+    clipes = obter_lista_video_clipes()
+    if not clipes:
+        return None
+
+    # 1. Tentativa de correspondência exata ou por pontuação máxima
+    melhor_match = None
+    maior_pontuacao = 0
+
+    for nome_arquivo, url in clipes:
+        pub_normalizado = normalizar_nome(nome_arquivo)
+        pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
+        
+        if pontos > maior_pontuacao:
+            maior_pontuacao = pontos
+            melhor_match = url
+
+    # Se encontrar correspondência relevante com base nos termos
+    if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
+        return melhor_match
+
+    # 2. Fallback: verificar se todos os termos aparecem no nome do ficheiro
+    for nome_arquivo, url in clipes:
+        pub_normalizado = normalizar_nome(nome_arquivo)
+        if all(termo in pub_normalizado for termo in termos_busca):
+            return url
+
+    return None
 
 if st.session_state.nome is None:
     st.title("🎤 Portal do Prestador")
@@ -177,7 +167,7 @@ else:
                                 "url_video": url_selecionada,
                                 "comando": "clipe"
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para la TV!")
                             time.sleep(1)
                             st.rerun()
             else:
@@ -205,7 +195,6 @@ else:
                     link = encontrar_link_real(nome_musica)
                     
                     if link:
-                        # Alterado para 'aguardando_play' para disparar o aviso e botão no app do cliente
                         requests.put(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
