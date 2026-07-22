@@ -29,10 +29,6 @@ def normalizar_nome(nome):
     return " ".join(nome.lower().split())
 
 def encontrar_link_real(nome_musica):
-    """
-    Procura o link real do vídeo no Cloudinary, varrendo pastas e subpastas 
-    e comparando por correspondência de palavras-chave.
-    """
     if not nome_musica:
         return None
         
@@ -41,7 +37,6 @@ def encontrar_link_real(nome_musica):
         return None
 
     try:
-        # Obtém todos os vídeos (incluindo os que estão dentro de subpastas como 'clipes' ou 'MÚSICAS DE KARAOKÊ')
         result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
         recursos = result.get('resources', [])
 
@@ -53,18 +48,15 @@ def encontrar_link_real(nome_musica):
             nome_arquivo = public_id.split('/')[-1]
             pub_normalizado = normalizar_nome(nome_arquivo)
             
-            # Conta quantas palavras do pedido do cliente aparecem no nome do ficheiro do Cloudinary
             pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
             
             if pontos > maior_pontuacao:
                 maior_pontuacao = pontos
                 melhor_match = item.get('secure_url')
 
-        # Se encontrou correspondência com pelo menos metade das palavras, retorna o link
         if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
             return melhor_match
 
-        # Segunda tentativa: procurar por busca exata de substring na Search API se a listagem direta falhar
         search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
         for res in search_result.get('resources', []):
             public_id = res.get('public_id', '')
@@ -213,6 +205,7 @@ else:
                     link = encontrar_link_real(nome_musica)
                     
                     if link:
+                        # Alterado para 'aguardando_play' para disparar o aviso e botão no app do cliente
                         requests.put(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
@@ -220,6 +213,8 @@ else:
                             "comando": "aguardando_play" 
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
+                        st.success(f"A chamar '{p.get('cantor')}' na tela!")
+                        time.sleep(1)
                         st.rerun()
                     else:
                         st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary! Verifique o nome.")
