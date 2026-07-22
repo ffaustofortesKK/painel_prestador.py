@@ -20,29 +20,61 @@ if "slug" not in st.session_state: st.session_state.slug = None
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 
 def normalizar_nome(nome):
+    if not nome:
+        return ""
     nome = nome.replace(".mp4", "")
-    nome = re.sub(r'["\'()\[\]]', '', nome)
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    nome = re.sub(r'[^\w\s]', '', nome)
-    return "_".join(nome.split())
+    nome = re.sub(r'["\'()\[\]{}]', '', nome)
+    nome = re.sub(r'[^\w\s]', ' ', nome)
+    return "".join(nome.lower().split())
 
-def encontrar_link_real(nome_base):
+def encontrar_link_real(nome_musica):
+    """
+    Procura o link real do vídeo no Cloudinary de forma inteligente e tolerante a falhas.
+    """
+    if not nome_musica:
+        return None
+        
+    nome_limpo_busca = normalizar_nome(nome_musica)
+    
     try:
+        # Tentar via Cloudinary Search API primeiro
         search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
-        for res in search_result.get('resources', []):
-            public_id = res.get('public_id', '').lower()
+        resources = search_result.get('resources', [])
+        
+        # 1. Tentativa de correspondência exata ou contida com normalização forte
+        for res in resources:
+            public_id = res.get('public_id', '')
             nome_arquivo = public_id.split('/')[-1]
-            if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
-                return res.get('secure_url')
+            pub_normalizado = normalizar_nome(nome_arquivo)
+            
+            if nome_limpo_busca in pub_normalizado or pub_normalizado in nome_limpo_busca:
+                secure_url = res.get('secure_url')
+                if secure_url:
+                    return secure_url
+
+        # 2. Segunda tentativa: via API de resources padrão (caso a busca falhe)
+        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
+        for item in result.get('resources', []):
+            public_id = item.get('public_id', '')
+            nome_arquivo = public_id.split('/')[-1]
+            pub_normalizado = normalizar_nome(nome_arquivo)
+            
+            if nome_limpo_busca in pub_normalizado or pub_normalizado in nome_limpo_busca:
+                secure_url = item.get('secure_url')
+                if secure_url:
+                    return secure_url
+
     except Exception as e:
-        print(f"Erro ao procurar link real: {e}")
+        print(f"Erro ao procurar link real no Cloudinary: {e}")
+        
     return None
 
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     
-    # 1. Tentar carregar via API de Recursos com paginação (Mais robusta)
+    # 1. Tentar carregar via API de Recursos com paginação
     try:
         next_cursor = None
         while True:
@@ -183,7 +215,7 @@ else:
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
                     nome_musica = p.get('musica')
-                    link = encontrar_link_real(normalizar_nome(nome_musica))
+                    link = encontrar_link_real(nome_musica)
                     
                     if link:
                         requests.put(url_status, json={
