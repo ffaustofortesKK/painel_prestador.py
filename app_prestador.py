@@ -42,20 +42,6 @@ def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     
-    # 1. Tentar carregar via API de Recursos (Mais garantida para listar tudo diretamente)
-    try:
-        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-        for item in result.get('resources', []):
-            pid = item.get('public_id', '')
-            url = item.get('secure_url')
-            if url and url not in seen_urls:
-                nome_limpo = pid.split('/')[-1]
-                lista.append((nome_limpo, url))
-                seen_urls.add(url)
-    except Exception as e:
-        print(f"Erro ao obter vídeos via resources: {e}")
-
-    # 2. Tentar carregar via Search API como método de suporte/complemento
     try:
         search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
         for item in search_result.get('resources', []):
@@ -67,7 +53,17 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        print(f"Erro ao obter vídeos via search: {e}")
+        try:
+            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
+            for item in result.get('resources', []):
+                pid = item.get('public_id', '')
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, url))
+                    seen_urls.add(url)
+        except Exception as inner_e:
+            print(f"Erro ao obter vídeos: {inner_e}")
             
     return lista
 
@@ -147,13 +143,13 @@ else:
                                 "url_video": url_selecionada,
                                 "comando": "clipe"
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                            st.success(f"Clipe enviado com sucesso para a TV!")
                             time.sleep(1)
                             st.rerun()
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Verifique se os ficheiros carregados estão na categoria 'video'.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -175,7 +171,7 @@ else:
                     link = encontrar_link_real(normalizar_nome(nome_musica))
                     
                     if link:
-                        requests.put(url_status, json={
+                        requests.patch(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
