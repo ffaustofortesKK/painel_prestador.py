@@ -28,24 +28,24 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        # Procura global em todos os assets de vídeo do Cloudinary (mesma base dos clipes e karaokes)
+        # Busca direta na API de pesquisa do Cloudinary para abranger todos os assets da nuvem
         search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
         resources = search_result.get('resources', [])
         
-        # 1. Tentar correspondência exata ou parcial direta
+        # 1. Tentar correspondência exata ou parcial com o nome limpo
         for res in resources:
             public_id = res.get('public_id', '').lower()
             nome_arquivo = public_id.split('/')[-1]
             if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
                 return res.get('secure_url')
                 
-        # 2. Tentar busca inteligente por palavras-chave principais (ignora sufixos automáticos da nuvem)
+        # 2. Busca inteligente por blocos de palavras-chave (ignora sufixos automáticos da nuvem)
         palavras_chave = [p for p in re.split(r'[_,\s-]', nome_base) if len(p) > 2]
         if palavras_chave:
             for res in resources:
                 public_id = res.get('public_id', '').lower()
                 matches = sum(1 for p in palavras_chave if p.lower() in public_id)
-                if matches >= min(2, len(palavras_chave)):
+                if matches >= min(1, len(palavras_chave)):
                     return res.get('secure_url')
                     
     except Exception as e:
@@ -115,7 +115,7 @@ else:
     
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
-    st.subheader("🎬 Gestão de Vídeos e Clipes (Cloudinary)")
+    st.subheader("🎬 Playlist de Vídeos Clipes")
     
     with st.container():
         st.markdown("""
@@ -135,7 +135,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar vídeo/clipe na nuvem:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -146,9 +146,9 @@ else:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
                 col_p1, col_p2 = st.columns([3, 1])
                 with col_p1:
-                    clipe_escolhido = st.selectbox("Selecione o vídeo encontrado:", nomes_clipes, label_visibility="collapsed")
+                    clipe_escolhido = st.selectbox("Selecione o clipe encontrado:", nomes_clipes, label_visibility="collapsed")
                 with col_p2:
-                    if st.button("🚀 Enviar Vídeo para Tela"):
+                    if st.button("🚀 Enviar Clipe para Tela"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
                             requests.patch(url_status, json={
@@ -157,11 +157,11 @@ else:
                                 "url_video": url_selecionada,
                                 "comando": "clipe"
                             })
-                            st.success(f"Vídeo enviado com sucesso para a TV!")
+                            st.success(f"Clipe enviado com sucesso para a TV!")
                             time.sleep(1)
                             st.rerun()
             else:
-                st.warning(f"Nenhum vídeo encontrado com o termo '{termo_pesquisa}'.")
+                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
             st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
             
