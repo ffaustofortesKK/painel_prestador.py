@@ -183,7 +183,6 @@ else:
                         st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary! Verifique o nome.")
         
         st.markdown("---")
-        # Correção direta do botão de forçar início para atualizar o comando via PATCH de forma limpa
         if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
             requests.patch(url_status, json={"comando": "executando_karaoke"})
             st.success("Comando de início imediato enviado para a TV!")
