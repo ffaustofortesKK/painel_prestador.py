@@ -28,7 +28,7 @@ def normalizar_nome(nome):
 
 def encontrar_link_real(nome_base):
     try:
-        result = cloudinary.api.resources(type="upload", resource_type="video", prefix="clipes/", max_results=500)
+        result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
         for res in result.get('resources', []):
             public_id = res.get('public_id', '').lower()
             nome_arquivo = public_id.split('/')[-1]
@@ -43,9 +43,9 @@ def obter_lista_video_clipes():
     seen_urls = set()
     
     try:
-        # Força a leitura direta da pasta 'clipes' que aparece na tua imagem
-        result = cloudinary.api.resources(type="upload", resource_type="video", prefix="clipes/", max_results=500)
-        for item in result.get('resources', []):
+        # Usa o motor de busca avançado do Cloudinary para encontrar todos os vídeos da conta
+        search_result = cloudinary.search.search().expression('resource_type:video').max_results(500).execute()
+        for item in search_result.get('resources', []):
             pid = item.get('public_id', '')
             url = item.get('secure_url')
             
@@ -54,7 +54,18 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        print(f"Erro ao obter vídeos da pasta clipes: {e}")
+        # Método alternativo caso o search falhe
+        try:
+            result = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
+            for item in result.get('resources', []):
+                pid = item.get('public_id', '')
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    nome_limpo = pid.split('/')[-1]
+                    lista.append((nome_limpo, url))
+                    seen_urls.add(url)
+        except Exception as inner_e:
+            print(f"Erro ao obter vídeos: {inner_e}")
             
     return lista
 
