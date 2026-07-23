@@ -70,6 +70,7 @@ def encontrar_link_real(nome_musica):
     melhor_match = None
     maior_pontuacao = 0
 
+    # 1ª Tentativa: Pontuação por contagem de palavras correspondentes
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
         pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
@@ -78,13 +79,19 @@ def encontrar_link_real(nome_musica):
             maior_pontuacao = pontos
             melhor_match = url
 
+    # Se encontrar pelo menos metade das palavras-chave, aceita
     if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
         return melhor_match
 
+    # 2ª Tentativa: Verificar se qualquer termo individual bate com o arquivo
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
-        if all(termo in pub_normalizado for termo in termos_busca):
+        if any(termo in pub_normalizado for termo in termos_busca if len(termo) > 2):
             return url
+
+    # 3ª Tentativa de recurso: Retornar o primeiro vídeo disponível se a busca exata falhar totalmente (evita travar o atendimento)
+    if clipes:
+        return clipes[0][1]
 
     return None
 
@@ -206,7 +213,6 @@ else:
                         st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary!")
         
         st.markdown("---")
-        # Botão Parar / Encerrar isolado a ocupar a largura total ou ajustado
         if st.button("⏹️ PARAR VÍDEO / ENCERRAR", use_container_width=True):
             requests.put(url_status, json={
                 "cantor": "",
