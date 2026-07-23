@@ -22,17 +22,24 @@ BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 def normalizar_nome(nome):
     if not nome:
         return ""
+    # Remove extensões e palavras comuns desnecessárias para a busca
     nome = nome.replace(".mp4", "").replace(".MP4", "").replace(".mkv", "").replace(".avi", "")
+    nome = nome.replace("Karaoke", "").replace("karaoke", "")
+    
+    # Normaliza e remove acentos
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    nome = re.sub(r'["\'()\[\]{}]', '', nome)
+    
+    # Remove símbolos, caracteres especiais (como o µ, apóstrofos, chavetas, etc.) e substitui por espaços
+    nome = re.sub(r'["\'()\[\]{}µ~^`´#\\/_|+*.,;:-]', ' ', nome)
     nome = re.sub(r'[^\w\s]', ' ', nome)
+    
+    # Retorna em minúsculas com espaços limpos
     return " ".join(nome.lower().split())
 
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     try:
-        # Utilizar a Search API do Cloudinary que é mais robusta e abrange todos os vídeos da conta
         query = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
         for item in query.get('resources', []):
             pid = item.get('public_id', '')
@@ -42,7 +49,6 @@ def obter_lista_video_clipes():
                 lista.append((nome_limpo, url))
                 seen_urls.add(url)
     except Exception as e:
-        # Fallback de segurança caso a Search API falhe por algum motivo específico de permissão
         try:
             result = cloudinary.api.resources(resource_type="video", max_results=500)
             for item in result.get('resources', []):
@@ -72,7 +78,7 @@ def encontrar_link_real(nome_musica):
     melhor_match = None
     maior_pontuacao = 0
 
-    # 1ª Tentativa: Pontuação por contagem de palavras correspondentes
+    # 1ª Tentativa: Pontuação por contagem de palavras correspondentes normalizadas
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
         pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
@@ -85,13 +91,13 @@ def encontrar_link_real(nome_musica):
     if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
         return melhor_match
 
-    # 2ª Tentativa: Verificar se qualquer termo individual bate com o arquivo
+    # 2ª Tentativa: Verificar se qualquer termo individual relevante bate com o arquivo
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
         if any(termo in pub_normalizado for termo in termos_busca if len(termo) > 2):
             return url
 
-    # 3ª Tentativa de recurso: Retornar o primeiro vídeo disponível se a busca exata falhar totalmente (evita travar o atendimento)
+    # 3ª Tentativa de recurso: Retornar o primeiro vídeo disponível se falhar totalmente (evita travar)
     if clipes:
         return clipes[0][1]
 
