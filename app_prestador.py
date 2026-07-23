@@ -33,11 +33,23 @@ def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
     
-    # 1. Tentar método direto de API resources (mais fiável para listar tudo sem restrições de search)
+    # 1. Tentar via Search API abrangente (procura em toda a conta e pastas)
+    try:
+        result = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
+        for item in result.get('resources', []):
+            pid = item.get('public_id', '')
+            url = item.get('secure_url')
+            if url and url not in seen_urls:
+                lista.append((pid, url))
+                seen_urls.add(url)
+    except Exception as e:
+        print(f"Erro na Search API: {e}")
+
+    # 2. Tentar via Admin API resources com paginação e suporte a pastas (`max_results=500`)
     try:
         next_cursor = None
         while True:
-            params = {"resource_type": "video", "max_results": 500}
+            params = {"resource_type": "video", "max_results": 500, "type": "upload"}
             if next_cursor:
                 params["next_cursor"] = next_cursor
             result = cloudinary.api.resources(**params)
@@ -50,21 +62,8 @@ def obter_lista_video_clipes():
             next_cursor = result.get('next_cursor')
             if not next_cursor:
                 break
-    except Exception as e:
-        print(f"Erro no resources clássico: {e}")
-
-    # 2. Se a lista estiver vazia, tenta via Search API como alternativa
-    if not lista:
-        try:
-            result = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
-            for item in result.get('resources', []):
-                pid = item.get('public_id', '')
-                url = item.get('secure_url')
-                if url and url not in seen_urls:
-                    lista.append((pid, url))
-                    seen_urls.add(url)
-        except Exception as e2:
-            print(f"Erro na Search API: {e2}")
+    except Exception as e2:
+        print(f"Erro no resources clássico: {e2}")
             
     return lista
 
@@ -77,9 +76,9 @@ def encontrar_link_real(nome_musica):
         return None
 
     termo_procura_limpo = normalizar_nome(nome_musica)
-    palavras_busca = [p for p in termo_procura_limpo.split() if len(p) > 2]
+    palavras_busca = [p for p in termo_procura_limpo.split() if len(p) > 1]
 
-    # 1ª Tentativa: Correspondência exata ou de alta prioridade por palavras-chave relevantes
+    # 1ª Tentativa: Correspondência exata por pontuação de palavras relevantes
     melhor_url = None
     max_pontos = 0
 
@@ -95,19 +94,20 @@ def encontrar_link_real(nome_musica):
     if melhor_url and max_pontos > 0:
         return melhor_url
 
-    # 2ª Tentativa: Verificar se qualquer palavra da busca está presente no ID completo do ficheiro
+    # 2ª Tentativa: Verificar se alguma palavra-chave principal (como "nany" ou "merengue") está no ID do ficheiro
     for pid, url in clipes:
         pid_normalizado = normalizar_nome(pid)
-        if any(p in pid_normalizado for p in palavras_busca):
+        if any(p in pid_normalizado for p in palavras_busca if len(p) > 2):
             return url
 
-    # 3ª Tentativa Flexível: Se contiver partes essenciais (ex: landrick ou mulheres)
+    # 3ª Tentativa por aproximação de substrings genéricas
     for pid, url in clipes:
         pid_lower = pid.lower()
-        if "landrick" in pid_lower or "mulheres" in pid_lower:
-            return url
+        for p in palavras_busca:
+            if len(p) > 3 and p in pid_lower:
+                return url
 
-    # 4ª Garantia Absoluta: Retorna o primeiro vídeo disponível para nunca bloquear a atuação
+    # 4ª Garantia de Segurança: Se houver vídeos na lista, retorna o primeiro para evitar que a fila fique bloqueada
     if clipes:
         return clipes[0][1]
 
@@ -195,7 +195,7 @@ else:
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Verifique se os vídeos foram carregados corretamente na nuvem.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Confirme se os vídeos estão na categoria 'Video' na sua nuvem.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
