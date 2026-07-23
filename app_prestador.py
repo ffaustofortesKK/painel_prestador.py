@@ -28,6 +28,7 @@ def normalizar_nome(nome):
     nome = re.sub(r'[^\w\s]', ' ', nome)
     return " ".join(nome.lower().split())
 
+@st.cache_data(ttl=300, show_spinner=False)
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
@@ -104,6 +105,13 @@ if st.session_state.nome is None:
                 st.rerun()
 else:
     st.sidebar.title("Configurações")
+    
+    if st.sidebar.button("🔄 Atualizar Ficheiros da Nuvem"):
+        st.cache_data.clear()
+        st.success("Conexão atualizada com sucesso!")
+        time.sleep(0.5)
+        st.rerun()
+
     if st.sidebar.button("Sair (Limpar Sessão)"):
         st.session_state.nome = None
         st.session_state.slug = None
@@ -170,7 +178,7 @@ else:
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Clique em 'Atualizar Ficheiros da Nuvem' na barra lateral.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
