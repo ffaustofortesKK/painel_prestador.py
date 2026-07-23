@@ -70,7 +70,6 @@ def encontrar_link_real(nome_musica):
     melhor_match = None
     maior_pontuacao = 0
 
-    # 1ª Tentativa: Pontuação por contagem de palavras correspondentes
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
         pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
@@ -79,19 +78,13 @@ def encontrar_link_real(nome_musica):
             maior_pontuacao = pontos
             melhor_match = url
 
-    # Se encontrar pelo menos metade das palavras-chave, aceita
     if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
         return melhor_match
 
-    # 2ª Tentativa: Verificar se qualquer termo individual bate com o arquivo
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
-        if any(termo in pub_normalizado for termo in termos_busca if len(termo) > 2):
+        if all(termo in pub_normalizado for termo in termos_busca):
             return url
-
-    # 3ª Tentativa de recurso: Retornar o primeiro vídeo disponível se a busca exata falhar totalmente (evita travar o atendimento)
-    if clipes:
-        return clipes[0][1]
 
     return None
 
@@ -213,28 +206,13 @@ else:
                         st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary!")
         
         st.markdown("---")
-        if st.button("⏹️ PARAR VÍDEO / ENCERRAR", use_container_width=True):
-            requests.put(url_status, json={
-                "cantor": "",
-                "musica": "",
-                "url_video": "",
-                "comando": "parar"
-            })
-            st.success("Comando para parar o vídeo enviado para a TV!")
+        if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
+            requests.patch(url_status, json={"comando": "play"})
+            st.success("Comando de início imediato enviado para a TV!")
             time.sleep(1)
             st.rerun()
     else:
         st.write("Fila vazia.")
-        if st.button("⏹️ PARAR VÍDEO / ENCERRAR TELA"):
-            requests.put(url_status, json={
-                "cantor": "",
-                "musica": "",
-                "url_video": "",
-                "comando": "parar"
-            })
-            st.success("Tela limpa/parada com sucesso!")
-            time.sleep(1)
-            st.rerun()
 
     st.markdown("---")
     st.subheader("⚠️ Pedidos Manuais (Atenção)")
