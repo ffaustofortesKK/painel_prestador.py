@@ -106,6 +106,19 @@ if st.session_state.nome is None:
 else:
     st.sidebar.title("Configurações")
     
+    url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
+
+    if st.sidebar.button("⏹️ Parar Vídeo na Tela"):
+        requests.patch(url_status, json={
+            "cantor": "",
+            "musica": "",
+            "url_video": "",
+            "comando": "aguardando_play"
+        })
+        st.sidebar.success("Vídeo parado e enviado para a fila de espera!")
+        time.sleep(0.5)
+        st.rerun()
+
     if st.sidebar.button("🔄 Atualizar Ficheiros da Nuvem"):
         st.cache_data.clear()
         st.success("Conexão atualizada com sucesso!")
@@ -127,8 +140,6 @@ else:
     c1.info(f"🔗 **Cliente:** {url_cliente}")
     c1.info(f"📺 **TV:** {url_tv}")
     qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
-    
-    url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
     
     st.subheader("🎬 Playlist de Vídeos Clipes")
     
@@ -212,18 +223,6 @@ else:
                         st.rerun()
                     else:
                         st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary!")
-        
-        st.markdown("---")
-        if st.button("⏹️ STOP / PARAR VÍDEO (TELA)"):
-            requests.put(url_status, json={
-                "cantor": "",
-                "musica": "",
-                "url_video": "",
-                "comando": "stop"
-            })
-            st.success("Comando de stop enviado para a TV!")
-            time.sleep(1)
-            st.rerun()
     else:
         st.write("Fila vazia.")
 
