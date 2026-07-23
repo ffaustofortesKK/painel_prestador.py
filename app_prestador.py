@@ -67,7 +67,6 @@ def encontrar_link_real(nome_musica):
     if not clipes:
         return None
 
-    # 1. Tentativa de correspondência exata ou por pontuação máxima
     melhor_match = None
     maior_pontuacao = 0
 
@@ -79,11 +78,9 @@ def encontrar_link_real(nome_musica):
             maior_pontuacao = pontos
             melhor_match = url
 
-    # Se encontrar correspondência relevante com base nos termos
     if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
         return melhor_match
 
-    # 2. Fallback: verificar se todos os termos aparecem no nome do ficheiro
     for nome_arquivo, url in clipes:
         pub_normalizado = normalizar_nome(nome_arquivo)
         if all(termo in pub_normalizado for termo in termos_busca):
@@ -161,7 +158,6 @@ else:
                     if st.button("🚀 Enviar Clipe para Tela"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
-                            # Utiliza PUT para limpar qualquer estado anterior de karaoke e forçar a exibição imediata do clipe
                             requests.put(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
@@ -174,7 +170,7 @@ else:
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Verifique se os ficheiros carregados estão na categoria 'video'.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -207,11 +203,11 @@ else:
                         time.sleep(1)
                         st.rerun()
                     else:
-                        st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary! Verifique o nome.")
+                        st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary!")
         
         st.markdown("---")
         if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
-            requests.patch(url_status, json={"comando": "executando_karaoke"})
+            requests.patch(url_status, json={"comando": "play"})
             st.success("Comando de início imediato enviado para a TV!")
             time.sleep(1)
             st.rerun()
