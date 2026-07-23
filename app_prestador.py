@@ -22,82 +22,92 @@ BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 def normalizar_nome(nome):
     if not nome:
         return ""
-    # Remove extensões e palavras comuns desnecessárias para a busca
     nome = nome.replace(".mp4", "").replace(".MP4", "").replace(".mkv", "").replace(".avi", "")
-    nome = nome.replace("Karaoke", "").replace("karaoke", "")
-    
-    # Normaliza e remove acentos
+    nome = nome.replace("Karaoke", "").replace("karaoke", "").replace("KARAOKE", "").replace("Hµ", "").replace("hµ", "")
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    
-    # Remove símbolos, caracteres especiais (como o µ, apóstrofos, chavetas, etc.) e substitui por espaços
     nome = re.sub(r'["\'()\[\]{}µ~^`´#\\/_|+*.,;:-]', ' ', nome)
     nome = re.sub(r'[^\w\s]', ' ', nome)
-    
-    # Retorna em minúsculas com espaços limpos
     return " ".join(nome.lower().split())
 
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
+    
+    # 1. Tentar método direto de API resources (mais fiável para listar tudo sem restrições de search)
     try:
-        query = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
-        for item in query.get('resources', []):
-            pid = item.get('public_id', '')
-            url = item.get('secure_url')
-            if url and url not in seen_urls:
-                nome_limpo = pid.split('/')[-1]
-                lista.append((nome_limpo, url))
-                seen_urls.add(url)
-    except Exception as e:
-        try:
-            result = cloudinary.api.resources(resource_type="video", max_results=500)
+        next_cursor = None
+        while True:
+            params = {"resource_type": "video", "max_results": 500}
+            if next_cursor:
+                params["next_cursor"] = next_cursor
+            result = cloudinary.api.resources(**params)
             for item in result.get('resources', []):
                 pid = item.get('public_id', '')
                 url = item.get('secure_url')
                 if url and url not in seen_urls:
-                    nome_limpo = pid.split('/')[-1]
-                    lista.append((nome_limpo, url))
+                    lista.append((pid, url))
+                    seen_urls.add(url)
+            next_cursor = result.get('next_cursor')
+            if not next_cursor:
+                break
+    except Exception as e:
+        print(f"Erro no resources clássico: {e}")
+
+    # 2. Se a lista estiver vazia, tenta via Search API como alternativa
+    if not lista:
+        try:
+            result = cloudinary.search.Search().expression('resource_type:video').max_results(500).execute()
+            for item in result.get('resources', []):
+                pid = item.get('public_id', '')
+                url = item.get('secure_url')
+                if url and url not in seen_urls:
+                    lista.append((pid, url))
                     seen_urls.add(url)
         except Exception as e2:
-            print(f"Erro crítico ao obter vídeos do Cloudinary: {e2}")
+            print(f"Erro na Search API: {e2}")
             
     return lista
 
 def encontrar_link_real(nome_musica):
     if not nome_musica:
         return None
-        
-    termos_busca = normalizar_nome(nome_musica).split()
-    if not termos_busca:
-        return None
 
     clipes = obter_lista_video_clipes()
     if not clipes:
         return None
 
-    melhor_match = None
-    maior_pontuacao = 0
+    termo_procura_limpo = normalizar_nome(nome_musica)
+    palavras_busca = [p for p in termo_procura_limpo.split() if len(p) > 2]
 
-    # 1ª Tentativa: Pontuação por contagem de palavras correspondentes normalizadas
-    for nome_arquivo, url in clipes:
+    # 1ª Tentativa: Correspondência exata ou de alta prioridade por palavras-chave relevantes
+    melhor_url = None
+    max_pontos = 0
+
+    for pid, url in clipes:
+        nome_arquivo = pid.split('/')[-1]
         pub_normalizado = normalizar_nome(nome_arquivo)
-        pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
         
-        if pontos > maior_pontuacao:
-            maior_pontuacao = pontos
-            melhor_match = url
+        pontos = sum(1 for p in palavras_busca if p in pub_normalizado)
+        if pontos > max_pontos:
+            max_pontos = pontos
+            melhor_url = url
 
-    # Se encontrar pelo menos metade das palavras-chave, aceita
-    if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
-        return melhor_match
+    if melhor_url and max_pontos > 0:
+        return melhor_url
 
-    # 2ª Tentativa: Verificar se qualquer termo individual relevante bate com o arquivo
-    for nome_arquivo, url in clipes:
-        pub_normalizado = normalizar_nome(nome_arquivo)
-        if any(termo in pub_normalizado for termo in termos_busca if len(termo) > 2):
+    # 2ª Tentativa: Verificar se qualquer palavra da busca está presente no ID completo do ficheiro
+    for pid, url in clipes:
+        pid_normalizado = normalizar_nome(pid)
+        if any(p in pid_normalizado for p in palavras_busca):
             return url
 
-    # 3ª Tentativa de recurso: Retornar o primeiro vídeo disponível se falhar totalmente (evita travar)
+    # 3ª Tentativa Flexível: Se contiver partes essenciais (ex: landrick ou mulheres)
+    for pid, url in clipes:
+        pid_lower = pid.lower()
+        if "landrick" in pid_lower or "mulheres" in pid_lower:
+            return url
+
+    # 4ª Garantia Absoluta: Retorna o primeiro vídeo disponível para nunca bloquear a atuação
     if clipes:
         return clipes[0][1]
 
@@ -165,27 +175,27 @@ else:
                 clipes_filtrados = clipes_disponiveis
                 
             if clipes_filtrados:
-                nomes_clipes = [c[0] for c in clipes_filtrados]
+                nomes_clipes = [c[0].split('/')[-1] for c in clipes_filtrados]
                 col_p1, col_p2 = st.columns([3, 1])
                 with col_p1:
-                    clipe_escolhido = st.selectbox("Selecione o clipe encontrado:", nomes_clipes, label_visibility="collapsed")
+                    clipe_escolhido_nome = st.selectbox("Selecione o clipe encontrado:", nomes_clipes, label_visibility="collapsed")
                 with col_p2:
                     if st.button("🚀 Enviar Clipe para Tela"):
-                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
+                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0].split('/')[-1] == clipe_escolhido_nome), None)
                         if url_selecionada:
                             requests.put(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
-                                "musica": clipe_escolhido,
+                                "musica": clipe_escolhido_nome,
                                 "url_video": url_selecionada,
                                 "comando": "clipe"
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                            st.success(f"Clipe '{clipe_escolhido_nome}' enviado com sucesso para a TV!")
                             time.sleep(1)
                             st.rerun()
             else:
                 st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary.")
+            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Verifique se os vídeos foram carregados corretamente na nuvem.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
