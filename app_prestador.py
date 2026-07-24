@@ -114,8 +114,9 @@ else:
             "musica": "",
             "url_video": "",
             "comando": "parar",
-            "loop": False,
-            "token_unico": str(time.time())
+            "token_unico": str(time.time()),
+            "acao_controle": "stop",
+            "repetir": False
         })
         st.sidebar.success("Vídeo parado com sucesso!")
         time.sleep(0.3)
@@ -172,63 +173,48 @@ else:
                 
             if clipes_filtrados:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
-                col_p1, col_p2 = st.columns([3, 1])
-                with col_p1:
-                    clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
-                with col_p2:
-                    if st.button("🚀 Iniciar Clipe na TV"):
-                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
-                        if url_selecionada:
-                            token_forcado = f"clipe_{int(time.time())}"
-                            requests.put(url_status, json={
-                                "cantor": "VÍDEO CLIPE",
-                                "musica": clipe_escolhido,
-                                "url_video": url_selecionada,
-                                "comando": "clipe",
-                                "loop": False,
-                                "token_unico": token_forcado
-                            })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado!")
-                            time.sleep(0.5)
-                            st.rerun()
-
-                # --- NOVOS BOTÕES DE CONTROLO (PLAY, PAUSE, REPETIR) ---
-                st.markdown("##### 🎛️ Controlos do Vídeo Clipe Atual")
-                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
                 
-                # Buscar estado atual do Firebase para saber o status do loop
-                status_atual_fb = requests.get(f"{BASE_URL}/status_{st.session_state.slug}.json").json() or {}
-                loop_atual = status_atual_fb.get("loop", False)
+                # Seleção do clipe
+                clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
+                
+                url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
 
-                with b_col1:
-                    if st.button("▶️ Play"):
-                        requests.patch(url_status, json={"comando": "clipe", "token_unico": str(time.time())})
-                        st.success("Play enviado!")
-                        time.sleep(0.3)
-                        st.rerun()
-                with b_col2:
-                    if st.button("⏸️ Pause"):
-                        requests.patch(url_status, json={"comando": "pausar", "token_unico": str(time.time())})
-                        st.success("Pause enviado!")
-                        time.sleep(0.3)
-                        st.rerun()
-                with b_col3:
-                    novo_loop = not loop_atual
-                    txt_loop = "🔁 Repetir: LIGADO" if novo_loop else "🔁 Repetir: DESLIGADO"
-                    if st.button(txt_loop):
-                        requests.patch(url_status, json={"loop": novo_loop, "token_unico": str(time.time())})
-                        st.rerun()
-                with b_col4:
-                    if st.button("⏹️ Parar Clipe"):
-                        requests.put(url_status, json={
-                            "cantor": "",
-                            "musica": "",
-                            "url_video": "",
-                            "comando": "parar",
-                            "loop": False,
-                            "token_unico": str(time.time())
-                        })
-                        st.rerun()
+                # Controlos: Play, Pause, Repetir (Loop)
+                st.markdown("### Controlo de Reprodução do Clipe")
+                col_b1, col_b2, col_b3, col_b4 = st.columns([1, 1, 1, 1])
+                
+                with col_b1:
+                    btn_play = st.button("▶️ Play")
+                with col_b2:
+                    btn_pause = st.button("⏸️ Pause")
+                with col_b3:
+                    btn_loop = st.checkbox("🔁 Repetir Clipe", value=False)
+                
+                if btn_play and url_selecionada:
+                    token_forcado = f"clipe_{int(time.time())}"
+                    requests.put(url_status, json={
+                        "cantor": "VÍDEO CLIPE",
+                        "musica": clipe_escolhido,
+                        "url_video": url_selecionada,
+                        "comando": "clipe",
+                        "token_unico": token_forcado,
+                        "acao_controle": "play",
+                        "repetir": btn_loop
+                    })
+                    st.success(f"Clipe '{clipe_escolhido}' iniciado!")
+                    time.sleep(0.3)
+                    st.rerun()
+
+                if btn_pause:
+                    requests.put(url_status, json={
+                        "comando": "clipe",
+                        "acao_controle": "pause",
+                        "repetir": btn_loop,
+                        "token_unico": str(time.time())
+                    })
+                    st.info("Comando de pausa enviado.")
+                    time.sleep(0.3)
+                    st.rerun()
 
             else:
                 st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
@@ -261,7 +247,6 @@ else:
                             "musica": nome_musica, 
                             "url_video": link, 
                             "comando": "aguardando_play",
-                            "loop": False,
                             "token_unico": token_forcado
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
