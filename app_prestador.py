@@ -20,26 +20,36 @@ if "slug" not in st.session_state: st.session_state.slug = None
 BASE_URL = "https://grupoffkaraoke-default-rtdb.firebaseio.com"
 
 def normalizar_nome(nome):
-    if not nome:
-        return ""
-    nome = nome.replace(".mp4", "").replace(".MP4", "").replace(".mkv", "").replace(".avi", "")
+    nome = nome.replace(".mp4", "")
+    nome = re.sub(r'["\'()\[\]]', '', nome)
     nome = unicodedata.normalize('NFKD', nome).encode('ASCII', 'ignore').decode('utf-8')
-    nome = re.sub(r'["\'()\[\]{}]', '', nome)
-    nome = re.sub(r'[^\w\s]', ' ', nome)
-    return " ".join(nome.lower().split())
+    nome = re.sub(r'[^\w\s]', '', nome)
+    return "_".join(nome.split())
 
-@st.cache_data(ttl=300, show_spinner=False)
+def encontrar_link_real(nome_base):
+    try:
+        all_res = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
+        for res in all_res.get('resources', []):
+            public_id = res.get('public_id', '').lower()
+            nome_arquivo = public_id.split('/')[-1]
+            if nome_base.lower() in nome_arquivo or nome_base.lower() in public_id:
+                return res.get('secure_url')
+    except Exception as e:
+        print(f"Erro ao procurar link real: {e}")
+    return None
+
 def obter_lista_video_clipes():
     lista = []
     seen_urls = set()
-    try:
-        next_cursor = None
-        while True:
-            params = {"type": "upload", "resource_type": "video", "max_results": 500}
-            if next_cursor:
-                params["next_cursor"] = next_cursor
-            
-            result = cloudinary.api.resources(**params)
+    
+    # Procura especificamente na pasta 'clipes' que aparece na tua imagem e variações
+    prefixos = ["clipes/", "clipes", "video_clipe/", "videoclipes/", ""]
+    for prefixo in prefixos:
+        try:
+            kwargs = {"type": "upload", "resource_type": "video", "max_results": 500}
+            if prefixo:
+                kwargs["prefix"] = prefixo
+            result = cloudinary.api.resources(**kwargs)
             for item in result.get('resources', []):
                 pid = item.get('public_id', '')
                 url = item.get('secure_url')
@@ -47,47 +57,10 @@ def obter_lista_video_clipes():
                     nome_limpo = pid.split('/')[-1]
                     lista.append((nome_limpo, url))
                     seen_urls.add(url)
+        except Exception as e:
+            print(f"Erro ao obter com prefixo '{prefixo}': {e}")
             
-            next_cursor = result.get('next_cursor')
-            if not next_cursor:
-                break
-    except Exception as e:
-        print(f"Erro ao obter vídeos via resources: {e}")
-        
     return lista
-
-def encontrar_link_real(nome_musica):
-    if not nome_musica:
-        return None
-        
-    termos_busca = normalizar_nome(nome_musica).split()
-    if not termos_busca:
-        return None
-
-    clipes = obter_lista_video_clipes()
-    if not clipes:
-        return None
-
-    melhor_match = None
-    maior_pontuacao = 0
-
-    for nome_arquivo, url in clipes:
-        pub_normalizado = normalizar_nome(nome_arquivo)
-        pontos = sum(1 for termo in termos_busca if termo in pub_normalizado)
-        
-        if pontos > maior_pontuacao:
-            maior_pontuacao = pontos
-            melhor_match = url
-
-    if melhor_match and maior_pontuacao >= max(1, len(termos_busca) // 2):
-        return melhor_match
-
-    for nome_arquivo, url in clipes:
-        pub_normalizado = normalizar_nome(nome_arquivo)
-        if all(termo in pub_normalizado for termo in termos_busca):
-            return url
-
-    return None
 
 if st.session_state.nome is None:
     st.title("🎤 Portal do Prestador")
@@ -105,27 +78,6 @@ if st.session_state.nome is None:
                 st.rerun()
 else:
     st.sidebar.title("Configurações")
-    
-    url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
-
-    if st.sidebar.button("⏹️ Parar Vídeo na Tela"):
-        requests.put(url_status, json={
-            "cantor": "",
-            "musica": "",
-            "url_video": "",
-            "comando": "parar",
-            "token_unico": str(time.time())
-        })
-        st.sidebar.success("Vídeo parado com sucesso!")
-        time.sleep(0.3)
-        st.rerun()
-
-    if st.sidebar.button("🔄 Atualizar Ficheiros da Nuvem"):
-        st.cache_data.clear()
-        st.success("Conexão atualizada com sucesso!")
-        time.sleep(0.3)
-        st.rerun()
-
     if st.sidebar.button("Sair (Limpar Sessão)"):
         st.session_state.nome = None
         st.session_state.slug = None
@@ -142,7 +94,9 @@ else:
     c1.info(f"📺 **TV:** {url_tv}")
     qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
     
-    st.subheader("🎬 Leitor de Vídeo Clipes (Fundo)")
+    url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
+    
+    st.subheader("🎬 Playlist de Vídeos Clipes (Fundo da TV)")
     
     with st.container():
         st.markdown("""
@@ -162,7 +116,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe na pasta:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -171,58 +125,49 @@ else:
                 
             if clipes_filtrados:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
-                clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
-                
-                # Botões de controlo do vídeo clipe
-                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
-                
-                url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
-                
-                with b_col1:
-                    if st.button("▶️ Play / Trocar"):
+                col_p1, col_p2 = st.columns([3, 1])
+                with col_p1:
+                    clipe_escolhido = st.selectbox("Selecione o clipe encontrado:", nomes_clipes, label_visibility="collapsed")
+                with col_p2:
+                    if st.button("🚀 Enviar Clipe para Tela"):
+                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
-                            requests.put(url_status, json={
+                            requests.patch(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
-                                "comando": "clipe",
-                                "acao_player": "play",
-                                "token_unico": str(time.time())
+                                "comando": "clipe"
                             })
-                            st.success(f"A reproduzir '{clipe_escolhido}'")
-                            time.sleep(0.3)
+                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
+                            time.sleep(1)
                             st.rerun()
-                with b_col2:
-                    if st.button("⏸️ Pause / Play"):
-                        requests.put(url_status, json={
-                            "comando": "clipe",
-                            "acao_player": "toggle_play",
-                            "token_unico": str(time.time())
-                        })
-                        st.rerun()
-                with b_col3:
-                    loop_ativado = st.toggle("Repetir (Loop)", value=False)
-                with b_col4:
-                    if st.button("⏹️ Stop"):
-                        requests.put(url_status, json={
-                            "cantor": "",
-                            "musica": "",
-                            "url_video": "",
-                            "comando": "parar",
-                            "acao_player": "stop",
-                            "token_unico": str(time.time())
-                        })
-                        st.success("Clipe parado e TV enviada para o ecrã inicial!")
-                        time.sleep(0.3)
-                        st.rerun()
-                
-                # Enviar estado atualizado do Loop se for alterado
-                # (Opcional: disparar alteração de loop sem quebrar a reprodução)
             else:
-                st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
+                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado no Cloudinary.")
+            st.warning("⚠️ Nenhum vídeo encontrado automaticamente.")
             
+        st.markdown("---")
+        st.markdown("⚡ **Seleção Manual (Nome exato do ficheiro):**")
+        col_m1, col_m2 = st.columns([3, 1])
+        with col_m1:
+            nome_manual = st.text_input("Nome do ficheiro (ex: nome_do_video.mp4):", key="input_manual_clipe")
+        with col_m2:
+            if st.button("🚀 Enviar Manual"):
+                if nome_manual:
+                    link_encontrado = encontrar_link_real(normalizar_nome(nome_manual))
+                    if link_encontrado:
+                        requests.patch(url_status, json={
+                            "cantor": "VÍDEO CLIPE",
+                            "musica": nome_manual,
+                            "url_video": link_encontrado,
+                            "comando": "clipe"
+                        })
+                        st.success(f"Clipe '{nome_manual}' enviado com sucesso!")
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error("❌ Vídeo não encontrado no Cloudinary com esse nome.")
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
@@ -240,39 +185,48 @@ else:
                 
                 if col3.button("🎤", key=f"start_{p_id}"):
                     nome_musica = p.get('musica')
-                    link = encontrar_link_real(nome_musica)
+                    link = encontrar_link_real(normalizar_nome(nome_musica))
                     
                     if link:
-                        token_forcado = f"karaoke_{int(time.time())}"
                         requests.put(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
-                            "comando": "aguardando_play",
-                            "token_unico": token_forcado
+                            "comando": "aguardando_play" 
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
-                        st.success(f"A chamar '{p.get('cantor')}'!")
-                        time.sleep(0.5)
                         st.rerun()
                     else:
-                        st.error(f"❌ Vídeo '{nome_musica}' não encontrado!")
+                        st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary! Verifique o nome.")
+        
+        st.markdown("---")
+        if st.button("▶️ FORÇAR INÍCIO DE MÚSICA (IMEDIATO)"):
+            requests.patch(url_status, json={"comando": "play"})
+            st.rerun()
     else:
         st.write("Fila vazia.")
 
     st.markdown("---")
-    st.subheader("⚠️ Pedidos Manuais")
+    st.subheader("⚠️ Pedidos Manuais (Atenção)")
     
     pedidos_manuais = {k: v for k, v in pedidos_data.items() if str(v.get('musica', '')).startswith("PEDIDO:")}
     
     if pedidos_manuais:
+        st.markdown("""
+            <style>
+                .blink { animation: blinker 1s linear infinite; color: yellow; font-weight: bold; 
+                           background-color: rgba(255, 255, 0, 0.1); padding: 10px; border: 2px solid yellow; border-radius: 10px; }
+                @keyframes blinker { 50% { opacity: 0; } }
+            </style>
+        """, unsafe_allow_html=True)
+        
         for p_id, p in pedidos_manuais.items():
-            st.warning(f"📢 {p.get('cantor')}: {p.get('musica')}")
-            if st.button(f"Remover {p_id[:4]}", key=f"del_man_{p_id}"):
+            st.markdown(f'<div class="blink">📢 {p.get("cantor")}: {p.get("musica")}</div>', unsafe_allow_html=True)
+            if st.button(f"Remover aviso {p_id[:4]}", key=f"del_man_{p_id}"):
                 requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
                 st.rerun()
     else:
-        st.success("Nenhum pedido manual.")
+        st.success("Nenhum pedido manual pendente.")
         
     time.sleep(2)
     st.rerun()
