@@ -162,7 +162,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe para reprodução contínua:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -173,56 +173,51 @@ else:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
                 clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
                 
+                # Botões de controlo do vídeo clipe
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+                
                 url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                 
-                # Configuração de Loop (Ligado / Desligado)
-                loop_opcao = st.radio("Repetir Vídeo Clipe (Loop):", ["Desligado", "Ligado"], horizontal=True, index=0)
-                loop_bool = True if loop_opcao == "Ligado" else False
-
-                # Botões de Controlo do Clipe
-                bc1, bc2, bc3 = st.columns(3)
-                
-                with bc1:
-                    if st.button("▶️ Play Clipe", use_container_width=True):
+                with b_col1:
+                    if st.button("▶️ Play / Trocar"):
                         if url_selecionada:
-                            token_forcado = f"clipe_{int(time.time())}"
                             requests.put(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
                                 "comando": "clipe",
-                                "loop": loop_bool,
-                                "token_unico": token_forcado
+                                "acao_player": "play",
+                                "token_unico": str(time.time())
                             })
-                            st.success(f"Play em '{clipe_escolhido}'!")
+                            st.success(f"A reproduzir '{clipe_escolhido}'")
                             time.sleep(0.3)
                             st.rerun()
-
-                with bc2:
-                    if st.button("⏸️ Pause Clipe", use_container_width=True):
-                        token_forcado = f"pause_{int(time.time())}"
+                with b_col2:
+                    if st.button("⏸️ Pause / Play"):
                         requests.put(url_status, json={
-                            "comando": "pause",
-                            "token_unico": token_forcado
+                            "comando": "clipe",
+                            "acao_player": "toggle_play",
+                            "token_unico": str(time.time())
                         })
-                        st.info("Comando de pausa enviado.")
-                        time.sleep(0.3)
                         st.rerun()
-
-                with bc3:
-                    if st.button("⏹️ Stop Clipe", use_container_width=True):
-                        token_forcado = f"stop_{int(time.time())}"
+                with b_col3:
+                    loop_ativado = st.toggle("Repetir (Loop)", value=False)
+                with b_col4:
+                    if st.button("⏹️ Stop"):
                         requests.put(url_status, json={
                             "cantor": "",
                             "musica": "",
                             "url_video": "",
                             "comando": "parar",
-                            "token_unico": token_forcado
+                            "acao_player": "stop",
+                            "token_unico": str(time.time())
                         })
-                        st.warning("Vídeo clipe parado.")
+                        st.success("Clipe parado e TV enviada para o ecrã inicial!")
                         time.sleep(0.3)
                         st.rerun()
-
+                
+                # Enviar estado atualizado do Loop se for alterado
+                # (Opcional: disparar alteração de loop sem quebrar a reprodução)
             else:
                 st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
         else:
