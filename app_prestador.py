@@ -109,14 +109,15 @@ else:
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
 
     if st.sidebar.button("⏹️ Parar Vídeo na Tela"):
-        requests.patch(url_status, json={
+        # Limpeza total forçada substituindo o objeto inteiro no Firebase
+        requests.put(url_status, json={
             "cantor": "",
             "musica": "",
             "url_video": "",
             "comando": "parar",
-            "id_sessao": ""
+            "id_sessao": "parado_" + str(time.time())
         })
-        st.sidebar.success("Vídeo parado e enviado para a fila de espera!")
+        st.sidebar.success("Vídeo parado e limpo na TV!")
         time.sleep(0.5)
         st.rerun()
 
@@ -179,7 +180,7 @@ else:
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
                             timestamp_unico = str(int(time.time() * 1000))
-                            requests.patch(url_status, json={
+                            requests.put(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
@@ -215,7 +216,7 @@ else:
                     
                     if link:
                         timestamp_unico = str(int(time.time() * 1000))
-                        requests.patch(url_status, json={
+                        requests.put(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
