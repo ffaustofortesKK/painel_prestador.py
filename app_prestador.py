@@ -113,7 +113,7 @@ else:
             "cantor": "",
             "musica": "",
             "url_video": "",
-            "comando": "aguardando_play"
+            "comando": "parar"
         })
         st.sidebar.success("Vídeo parado e enviado para a fila de espera!")
         time.sleep(0.5)
@@ -177,7 +177,8 @@ else:
                     if st.button("🚀 Enviar Clipe para Tela"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
-                            requests.put(url_status, json={
+                            # CORREÇÃO CRUCIAL: Usar PATCH e garantir um timestamp ou estado limpo para evitar loop infinito
+                            requests.patch(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
@@ -211,7 +212,7 @@ else:
                     link = encontrar_link_real(nome_musica)
                     
                     if link:
-                        requests.put(url_status, json={
+                        requests.patch(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
