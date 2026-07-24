@@ -113,7 +113,8 @@ else:
             "cantor": "",
             "musica": "",
             "url_video": "",
-            "comando": "parar"
+            "comando": "parar",
+            "id_sessao": ""
         })
         st.sidebar.success("Vídeo parado e enviado para a fila de espera!")
         time.sleep(0.5)
@@ -177,12 +178,13 @@ else:
                     if st.button("🚀 Enviar Clipe para Tela"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
-                            # CORREÇÃO CRUCIAL: Usar PATCH e garantir um timestamp ou estado limpo para evitar loop infinito
+                            timestamp_unico = str(int(time.time() * 1000))
                             requests.patch(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
-                                "comando": "clipe"
+                                "comando": "clipe",
+                                "id_sessao": timestamp_unico
                             })
                             st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
                             time.sleep(1)
@@ -212,11 +214,13 @@ else:
                     link = encontrar_link_real(nome_musica)
                     
                     if link:
+                        timestamp_unico = str(int(time.time() * 1000))
                         requests.patch(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
-                            "comando": "aguardando_play" 
+                            "comando": "aguardando_play",
+                            "id_sessao": timestamp_unico
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
                         st.success(f"A chamar '{p.get('cantor')}' na tela!")
