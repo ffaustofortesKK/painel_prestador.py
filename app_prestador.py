@@ -162,7 +162,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe para reprodução contínua:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -173,12 +173,17 @@ else:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
                 clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
                 
-                # Controlos de Play / Repetir o Vídeo Clipe
-                col_b1, col_b2, col_b3 = st.columns(3)
+                url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                 
-                with col_b1:
-                    if st.button("▶️ Iniciar Clipe"):
-                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
+                # Configuração de Loop (Ligado / Desligado)
+                loop_opcao = st.radio("Repetir Vídeo Clipe (Loop):", ["Desligado", "Ligado"], horizontal=True, index=0)
+                loop_bool = True if loop_opcao == "Ligado" else False
+
+                # Botões de Controlo do Clipe
+                bc1, bc2, bc3 = st.columns(3)
+                
+                with bc1:
+                    if st.button("▶️ Play Clipe", use_container_width=True):
                         if url_selecionada:
                             token_forcado = f"clipe_{int(time.time())}"
                             requests.put(url_status, json={
@@ -186,42 +191,38 @@ else:
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
                                 "comando": "clipe",
-                                "repetir": False,
+                                "loop": loop_bool,
                                 "token_unico": token_forcado
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' iniciado!")
+                            st.success(f"Play em '{clipe_escolhido}'!")
                             time.sleep(0.3)
                             st.rerun()
 
-                with col_b2:
-                    if st.button("🔁 Iniciar em Loop (Repetir)"):
-                        url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
-                        if url_selecionada:
-                            token_forcado = f"clipe_loop_{int(time.time())}"
-                            requests.put(url_status, json={
-                                "cantor": "VÍDEO CLIPE",
-                                "musica": clipe_escolhido,
-                                "url_video": url_selecionada,
-                                "comando": "clipe",
-                                "repetir": True,
-                                "token_unico": token_forcado
-                            })
-                            st.success(f"Clipe '{clipe_escolhido}' em loop!")
-                            time.sleep(0.3)
-                            st.rerun()
+                with bc2:
+                    if st.button("⏸️ Pause Clipe", use_container_width=True):
+                        token_forcado = f"pause_{int(time.time())}"
+                        requests.put(url_status, json={
+                            "comando": "pause",
+                            "token_unico": token_forcado
+                        })
+                        st.info("Comando de pausa enviado.")
+                        time.sleep(0.3)
+                        st.rerun()
 
-                with col_b3:
-                    if st.button("⏸️ Parar Clipe"):
+                with bc3:
+                    if st.button("⏹️ Stop Clipe", use_container_width=True):
+                        token_forcado = f"stop_{int(time.time())}"
                         requests.put(url_status, json={
                             "cantor": "",
                             "musica": "",
                             "url_video": "",
                             "comando": "parar",
-                            "token_unico": str(time.time())
+                            "token_unico": token_forcado
                         })
-                        st.success("Clipe parado!")
+                        st.warning("Vídeo clipe parado.")
                         time.sleep(0.3)
                         st.rerun()
+
             else:
                 st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
         else:
