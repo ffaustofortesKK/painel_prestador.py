@@ -109,22 +109,21 @@ else:
     url_status = f"{BASE_URL}/status_{st.session_state.slug}.json"
 
     if st.sidebar.button("⏹️ Parar Vídeo na Tela"):
-        # Limpeza total forçada substituindo o objeto inteiro no Firebase
         requests.put(url_status, json={
             "cantor": "",
             "musica": "",
             "url_video": "",
             "comando": "parar",
-            "id_sessao": "parado_" + str(time.time())
+            "token_unico": str(time.time())
         })
-        st.sidebar.success("Vídeo parado e limpo na TV!")
-        time.sleep(0.5)
+        st.sidebar.success("Vídeo parado com sucesso!")
+        time.sleep(0.3)
         st.rerun()
 
     if st.sidebar.button("🔄 Atualizar Ficheiros da Nuvem"):
         st.cache_data.clear()
         st.success("Conexão atualizada com sucesso!")
-        time.sleep(0.5)
+        time.sleep(0.3)
         st.rerun()
 
     if st.sidebar.button("Sair (Limpar Sessão)"):
@@ -143,7 +142,7 @@ else:
     c1.info(f"📺 **TV:** {url_tv}")
     qr = qrcode.make(url_cliente); buf = BytesIO(); qr.save(buf, format="PNG"); c2.image(buf.getvalue(), width=100)
     
-    st.subheader("🎬 Playlist de Vídeos Clipes")
+    st.subheader("🎬 Leitor de Vídeo Clipes (Fundo)")
     
     with st.container():
         st.markdown("""
@@ -163,7 +162,7 @@ else:
         clipes_disponiveis = obter_lista_video_clipes()
         
         if clipes_disponiveis:
-            termo_pesquisa = st.text_input("🔍 Pesquisar clipe:", "").strip().lower()
+            termo_pesquisa = st.text_input("🔍 Pesquisar clipe para reprodução contínua:", "").strip().lower()
             
             if termo_pesquisa:
                 clipes_filtrados = [c for c in clipes_disponiveis if termo_pesquisa in c[0].lower()]
@@ -174,26 +173,26 @@ else:
                 nomes_clipes = [c[0] for c in clipes_filtrados]
                 col_p1, col_p2 = st.columns([3, 1])
                 with col_p1:
-                    clipe_escolhido = st.selectbox("Selecione o clipe encontrado:", nomes_clipes, label_visibility="collapsed")
+                    clipe_escolhido = st.selectbox("Selecione o clipe:", nomes_clipes, label_visibility="collapsed")
                 with col_p2:
-                    if st.button("🚀 Enviar Clipe para Tela"):
+                    if st.button("🚀 Iniciar Clipe na TV"):
                         url_selecionada = next((c[1] for c in clipes_filtrados if c[0] == clipe_escolhido), None)
                         if url_selecionada:
-                            timestamp_unico = str(int(time.time() * 1000))
+                            token_forcado = f"clipe_{int(time.time())}"
                             requests.put(url_status, json={
                                 "cantor": "VÍDEO CLIPE",
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
                                 "comando": "clipe",
-                                "id_sessao": timestamp_unico
+                                "token_unico": token_forcado
                             })
-                            st.success(f"Clipe '{clipe_escolhido}' enviado com sucesso para a TV!")
-                            time.sleep(1)
+                            st.success(f"Clipe '{clipe_escolhido}' enviado!")
+                            time.sleep(0.5)
                             st.rerun()
             else:
-                st.warning(f"Nenhum clipe encontrado com o termo '{termo_pesquisa}'.")
+                st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
         else:
-            st.warning("⚠️ Nenhum vídeo encontrado na conta Cloudinary. Clique em 'Atualizar Ficheiros da Nuvem' na barra lateral.")
+            st.warning("⚠️ Nenhum vídeo encontrado no Cloudinary.")
             
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -215,44 +214,36 @@ else:
                     link = encontrar_link_real(nome_musica)
                     
                     if link:
-                        timestamp_unico = str(int(time.time() * 1000))
+                        token_forcado = f"karaoke_{int(time.time())}"
                         requests.put(url_status, json={
                             "cantor": p.get('cantor'), 
                             "musica": nome_musica, 
                             "url_video": link, 
                             "comando": "aguardando_play",
-                            "id_sessao": timestamp_unico
+                            "token_unico": token_forcado
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
-                        st.success(f"A chamar '{p.get('cantor')}' na tela!")
-                        time.sleep(1)
+                        st.success(f"A chamar '{p.get('cantor')}'!")
+                        time.sleep(0.5)
                         st.rerun()
                     else:
-                        st.error(f"❌ Vídeo '{nome_musica}' não foi encontrado no Cloudinary!")
+                        st.error(f"❌ Vídeo '{nome_musica}' não encontrado!")
     else:
         st.write("Fila vazia.")
 
     st.markdown("---")
-    st.subheader("⚠️ Pedidos Manuais (Atenção)")
+    st.subheader("⚠️ Pedidos Manuais")
     
     pedidos_manuais = {k: v for k, v in pedidos_data.items() if str(v.get('musica', '')).startswith("PEDIDO:")}
     
     if pedidos_manuais:
-        st.markdown("""
-            <style>
-                .blink { animation: blinker 1s linear infinite; color: yellow; font-weight: bold; 
-                           background-color: rgba(255, 255, 0, 0.1); padding: 10px; border: 2px solid yellow; border-radius: 10px; }
-                @keyframes blinker { 50% { opacity: 0; } }
-            </style>
-        """, unsafe_allow_html=True)
-        
         for p_id, p in pedidos_manuais.items():
-            st.markdown(f'<div class="blink">📢 {p.get("cantor")}: {p.get("musica")}</div>', unsafe_allow_html=True)
-            if st.button(f"Remover aviso {p_id[:4]}", key=f"del_man_{p_id}"):
+            st.warning(f"📢 {p.get('cantor')}: {p.get('musica')}")
+            if st.button(f"Remover {p_id[:4]}", key=f"del_man_{p_id}"):
                 requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
                 st.rerun()
     else:
-        st.success("Nenhum pedido manual pendente.")
+        st.success("Nenhum pedido manual.")
         
     time.sleep(2)
     st.rerun()
