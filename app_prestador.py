@@ -114,6 +114,7 @@ else:
             "musica": "",
             "url_video": "",
             "comando": "parar",
+            "loop": False,
             "token_unico": str(time.time())
         })
         st.sidebar.success("Vídeo parado com sucesso!")
@@ -184,11 +185,51 @@ else:
                                 "musica": clipe_escolhido,
                                 "url_video": url_selecionada,
                                 "comando": "clipe",
+                                "loop": False,
                                 "token_unico": token_forcado
                             })
                             st.success(f"Clipe '{clipe_escolhido}' enviado!")
                             time.sleep(0.5)
                             st.rerun()
+
+                # --- NOVOS BOTÕES DE CONTROLO (PLAY, PAUSE, REPETIR) ---
+                st.markdown("##### 🎛️ Controlos do Vídeo Clipe Atual")
+                b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+                
+                # Buscar estado atual do Firebase para saber o status do loop
+                status_atual_fb = requests.get(f"{BASE_URL}/status_{st.session_state.slug}.json").json() or {}
+                loop_atual = status_atual_fb.get("loop", False)
+
+                with b_col1:
+                    if st.button("▶️ Play"):
+                        requests.patch(url_status, json={"comando": "clipe", "token_unico": str(time.time())})
+                        st.success("Play enviado!")
+                        time.sleep(0.3)
+                        st.rerun()
+                with b_col2:
+                    if st.button("⏸️ Pause"):
+                        requests.patch(url_status, json={"comando": "pausar", "token_unico": str(time.time())})
+                        st.success("Pause enviado!")
+                        time.sleep(0.3)
+                        st.rerun()
+                with b_col3:
+                    novo_loop = not loop_atual
+                    txt_loop = "🔁 Repetir: LIGADO" if novo_loop else "🔁 Repetir: DESLIGADO"
+                    if st.button(txt_loop):
+                        requests.patch(url_status, json={"loop": novo_loop, "token_unico": str(time.time())})
+                        st.rerun()
+                with b_col4:
+                    if st.button("⏹️ Parar Clipe"):
+                        requests.put(url_status, json={
+                            "cantor": "",
+                            "musica": "",
+                            "url_video": "",
+                            "comando": "parar",
+                            "loop": False,
+                            "token_unico": str(time.time())
+                        })
+                        st.rerun()
+
             else:
                 st.warning(f"Nenhum clipe encontrado para '{termo_pesquisa}'.")
         else:
@@ -220,6 +261,7 @@ else:
                             "musica": nome_musica, 
                             "url_video": link, 
                             "comando": "aguardando_play",
+                            "loop": False,
                             "token_unico": token_forcado
                         })
                         requests.delete(f"{BASE_URL}/pedidos_{st.session_state.slug}/{p_id}.json")
